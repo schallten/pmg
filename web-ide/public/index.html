@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PMG - WEB IDE</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="screen active">
+        <div class="welcome-box">
+            <h1>PMG - WEB IDE</h1>
+            <p>Enter the absolute path to your workspace:</p>
+            <input type="text" id="workspace-path" placeholder="/home/user/projects/my-app" autofocus>
+            <button id="open-btn">Open Workspace</button>
+            <p id="error-msg" class="error"></p>
+        </div>
+    </div>
+
+    <!-- Main IDE Interface -->
+    <div id="ide-screen" class="screen">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span id="project-name">Project</span>
+                <button id="refresh-btn" title="Refresh">↻</button>
+            </div>
+            <div id="file-tree" class="file-tree"></div>
+        </div>
+
+        <div class="main-area">
+            <div class="editor-header">
+                <span id="current-filename">No file open</span>
+                <div class="actions">
+                    <button id="save-btn">Save (Ctrl+S)</button>
+                    <button id="terminal-btn">Open Terminal</button>
+                </div>
+            </div>
+            <div class="editor-container">
+                <div id="line-numbers" class="line-numbers"></div>
+                <textarea id="code-editor" spellcheck="false"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
