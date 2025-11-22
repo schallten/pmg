@@ -310,24 +310,25 @@ function renderTreeNodes(items, container) {
 }
 
 async function loadFile(path) {
+    currentFilePath = path;
+    currentFilename.textContent = path;
+
+    // Check if it's a media file
+    const filename = path.split('/').pop();
+    if (isMediaFile(filename)) {
+        displayMedia(path, filename);
+        return;
+    }
+
     try {
         const response = await fetch(`/file?path=${encodeURIComponent(path)}`);
         const data = await response.json();
 
         if (data.content !== undefined) {
-            currentFilePath = path;
-            currentFilename.textContent = path;
-
-            // Check if it's a media file
-            const filename = path.split('/').pop();
-            if (isMediaFile(filename)) {
-                displayMedia(path, filename);
-            } else {
-                hideMedia();
-                codeEditor.value = data.content;
-                updateLineNumbers();
-                updateHighlighting();
-            }
+            hideMedia();
+            codeEditor.value = data.content;
+            updateLineNumbers();
+            updateHighlighting();
         }
     } catch (err) {
         alert('Error loading file');

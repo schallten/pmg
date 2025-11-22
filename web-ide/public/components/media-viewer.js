@@ -39,7 +39,7 @@ export function displayMedia(path, filename) {
 
     // Create appropriate media element
     const encodedPath = encodeURIComponent(path);
-    const src = `/file?path=${encodedPath}`;
+    const src = `/file?path=${encodedPath}&raw=true`;
 
     let mediaElement;
     if (mediaType === 'image') {
