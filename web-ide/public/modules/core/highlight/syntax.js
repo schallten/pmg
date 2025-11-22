@@ -15,43 +15,9 @@ export function getDescription() {
 
 export function highlight(code) {
     if (!code) return '';
-
-    // Escape HTML characters first to prevent XSS and rendering issues
-    let html = code
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-
     if (!isEnabled.value) {
-        return html;
+        return escapeHtml(code);
     }
-
-    // Define token patterns
-    const patterns = [
-        // Comments (Single line //... and Multi line /*...*/)
-        { regex: /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)/g, class: 'comment' },
-
-        // Strings ("..." or '...')
-        { regex: /(".*?"|'.*?')/g, class: 'string' },
-
-        // Numbers
-        { regex: /\b(\d+)\b/g, class: 'number' },
-
-        // Keywords (Common JS/C/Java/Python keywords)
-        {
-            regex: /\b(const|let|var|if|else|for|while|return|function|class|import|export|from|async|await|try|catch|switch|case|break|continue|new|this|typeof|void|def|class|public|private|protected|int|float|string|boolean)\b/g,
-            class: 'keyword'
-        },
-
-        // Operators
-        { regex: /(\+|\-|\*|\/|=|!|&|\||<|>|\?|:)/g, class: 'operator' },
-
-        // Function calls (word followed by ()
-        { regex: /\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\()/g, class: 'function' }
-    ];
-
 
     // Combined Regex Approach:
     // 1. Comments
@@ -59,15 +25,52 @@ export function highlight(code) {
     // 3. Keywords
     // 4. Numbers
     // 5. Functions
+    // 6. Operators (Added back)
 
-    const tokenRegex = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(".*?"|'.*?')|\b(const|let|var|if|else|for|while|return|function|class|import|export|from|async|await|try|catch|switch|case|break|continue|new|this|typeof|void|def|public|private|protected|int|float|boolean)\b|\b(\d+)\b|\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\()/g;
+    const tokenRegex = /(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|(".*?"|'.*?')|\b(const|let|var|if|else|for|while|return|function|class|import|export|from|async|await|try|catch|switch|case|break|continue|new|this|typeof|void|def|public|private|protected|int|float|boolean)\b|\b(\d+)\b|\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\()|(\+|\-|\*|\/|=|!|&|\||<|>|\?|:)/g;
 
-    return html.replace(tokenRegex, (match, comment, string, keyword, number, func) => {
-        if (comment) return `<span class="token comment">${comment}</span>`;
-        if (string) return `<span class="token string">${string}</span>`;
-        if (keyword) return `<span class="token keyword">${keyword}</span>`;
-        if (number) return `<span class="token number">${number}</span>`;
-        if (func) return `<span class="token function">${func}</span>`;
-        return match;
-    });
+    let lastIndex = 0;
+    let result = '';
+    let match;
+
+    while ((match = tokenRegex.exec(code)) !== null) {
+        // Append text before match (escaped)
+        const preMatch = code.substring(lastIndex, match.index);
+        result += escapeHtml(preMatch);
+
+        // Process match
+        const matchedText = match[0];
+        const escapedText = escapeHtml(matchedText);
+
+        if (match[1]) { // comment
+            result += `<span class="token comment">${escapedText}</span>`;
+        } else if (match[2]) { // string
+            result += `<span class="token string">${escapedText}</span>`;
+        } else if (match[3]) { // keyword
+            result += `<span class="token keyword">${escapedText}</span>`;
+        } else if (match[4]) { // number
+            result += `<span class="token number">${escapedText}</span>`;
+        } else if (match[5]) { // function
+            result += `<span class="token function">${escapedText}</span>`;
+        } else if (match[6]) { // operator
+            result += `<span class="token operator">${escapedText}</span>`;
+        } else {
+            result += escapedText;
+        }
+
+        lastIndex = tokenRegex.lastIndex;
+    }
+
+    // Append remaining text (escaped)
+    result += escapeHtml(code.substring(lastIndex));
+    return result;
+}
+
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
