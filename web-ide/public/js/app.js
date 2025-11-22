@@ -1,11 +1,15 @@
-import * as SyntaxHighlighter from './modules/core/highlight/syntax.js';
+import * as SyntaxHighlighter from '../modules/core/highlight/syntax.js';
+import * as AIChat from '../modules/core/ai-chat/chat.js';
+import { initStatusBar } from '../components/status-bar.js';
+import { isMediaFile, displayMedia, hideMedia } from '../components/media-viewer.js';
+import { initAIChatUI } from '../components/ai-chat-ui.js';
+import { initBrowserModal } from '../components/browser-modal.js';
 
 // ==========================================
 // PMG - WEB IDE Client Side Logic
 // ==========================================
 
 // --- 1. Select DOM Elements ---
-// We get references to all the HTML elements we need to interact with.
 const welcomeScreen = document.getElementById('welcome-screen');
 const ideScreen = document.getElementById('ide-screen');
 const workspaceInput = document.getElementById('workspace-path');
@@ -20,6 +24,7 @@ const currentFilename = document.getElementById('current-filename');
 const saveBtn = document.getElementById('save-btn');
 const terminalBtn = document.getElementById('terminal-btn');
 const refreshBtn = document.getElementById('refresh-btn');
+const wrapBtn = document.getElementById('wrap-btn');
 const projectName = document.getElementById('project-name');
 const pluginCountEl = document.getElementById('plugin-count');
 const settingsBtn = document.getElementById('settings-btn');
@@ -28,20 +33,18 @@ const closeSettingsBtn = document.getElementById('close-settings');
 const pluginListEl = document.getElementById('plugin-list');
 
 // --- 2. State Variables ---
-// Variables to keep track of the current application state.
-let currentFilePath = null; // Stores the path of the currently open file
+let currentFilePath = null;
 let plugins = [];
+let isWordWrapEnabled = false;
 
 // --- 3. Plugin System ---
 
 function loadPlugins() {
-    // In a real system, this might fetch a list of modules dynamically.
-    // For now, we manually register our core modules.
     plugins = [
-        SyntaxHighlighter
+        SyntaxHighlighter,
+        AIChat
     ];
 
-    // Update Welcome Screen
     if (pluginCountEl) {
         pluginCountEl.textContent = plugins.length;
     }
@@ -69,13 +72,11 @@ function renderSettings() {
             </label>
         `;
 
-        // Add event listener for toggle
         const checkbox = item.querySelector('input');
         checkbox.addEventListener('change', (e) => {
             const isChecked = e.target.checked;
             if (plugin.isEnabled) {
                 plugin.isEnabled.value = isChecked;
-                // Re-render highlighting if this is the syntax highlighter
                 if (currentFilePath) {
                     updateHighlighting();
                 }
@@ -87,10 +88,13 @@ function renderSettings() {
 }
 
 // --- 4. Event Listeners ---
-// We listen for user actions like clicks and key presses.
 
-// Initialize Plugins
 loadPlugins();
+
+// Initialize components
+initStatusBar();
+initAIChatUI();
+initBrowserModal();
 
 // Settings Modal
 if (settingsBtn) {
@@ -106,17 +110,14 @@ if (closeSettingsBtn) {
     });
 }
 
-// Close modal when clicking outside
 window.addEventListener('click', (e) => {
     if (e.target === settingsModal) {
         settingsModal.style.display = 'none';
     }
 });
 
-// "Open Workspace" button click
 openBtn.addEventListener('click', openWorkspace);
 
-// "Browse" button click
 const browseBtn = document.getElementById('browse-btn');
 if (browseBtn) {
     browseBtn.addEventListener('click', async () => {
@@ -126,10 +127,8 @@ if (browseBtn) {
 
             if (data.path) {
                 workspaceInput.value = data.path;
-                // Optional: Auto-open or just focus
                 workspaceInput.focus();
             } else if (data.error) {
-                // If user cancelled, just ignore or show small message
                 if (data.error !== 'Selection cancelled') {
                     errorMsg.textContent = data.error;
                 }
@@ -140,7 +139,6 @@ if (browseBtn) {
     });
 }
 
-// Allow pressing "Enter" in the input field to open workspace
 workspaceInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') openWorkspace();
 });
@@ -150,89 +148,85 @@ saveBtn.addEventListener('click', saveFile);
 terminalBtn.addEventListener('click', openTerminal);
 refreshBtn.addEventListener('click', loadFileTree);
 
+// Word wrap toggle
+if (wrapBtn) {
+    wrapBtn.addEventListener('click', toggleWordWrap);
+}
+
 // Editor interactions
 codeEditor.addEventListener('input', () => {
     updateLineNumbers();
     updateHighlighting();
 });
-codeEditor.addEventListener('scroll', syncScroll); // Sync scroll between editor and line numbers
-codeEditor.addEventListener('keydown', handleEditorKeys); // Handle Tab and Ctrl+S
+codeEditor.addEventListener('scroll', syncScroll);
+codeEditor.addEventListener('keydown', handleEditorKeys);
 
 // --- 5. Functions ---
 
-/**
- * Syncs the scroll position of the line numbers and highlighting with the code editor.
- */
+function toggleWordWrap() {
+    isWordWrapEnabled = !isWordWrapEnabled;
+
+    if (isWordWrapEnabled) {
+        codeEditor.classList.add('word-wrap');
+        highlighting.classList.add('word-wrap');
+        wrapBtn.textContent = 'Unwrap';
+    } else {
+        codeEditor.classList.remove('word-wrap');
+        highlighting.classList.remove('word-wrap');
+        wrapBtn.textContent = 'Word Wrap';
+    }
+}
+
 function syncScroll() {
     lineNumbers.scrollTop = codeEditor.scrollTop;
     highlighting.scrollTop = codeEditor.scrollTop;
     highlighting.scrollLeft = codeEditor.scrollLeft;
 }
 
-/**
- * Updates the highlighting layer content.
- */
 function updateHighlighting() {
     let text = codeEditor.value;
 
-    // Handle final newline for proper scrolling/rendering match
     if (text[text.length - 1] === "\n") {
         text += " ";
     }
 
-    // Use the plugin directly (it handles isEnabled check internally now)
     highlightingContent.innerHTML = SyntaxHighlighter.highlight(text);
 }
 
-/**
- * Handles special key presses in the editor (Tab for indentation, Ctrl+S for save).
- */
 function handleEditorKeys(e) {
-    // Handle 'Tab' key to insert spaces instead of changing focus
     if (e.key === 'Tab') {
         e.preventDefault();
         const start = codeEditor.selectionStart;
         const end = codeEditor.selectionEnd;
 
-        // Insert 4 spaces at the cursor position
         codeEditor.value = codeEditor.value.substring(0, start) + '    ' + codeEditor.value.substring(end);
 
-        // Move cursor after the inserted spaces
         codeEditor.selectionStart = codeEditor.selectionEnd = start + 4;
         updateLineNumbers();
         updateHighlighting();
     }
 
-    // Handle 'Ctrl+S' (or Cmd+S on Mac) to save the file
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         saveFile();
     }
 }
 
-/**
- * Updates the line numbers sidebar based on the number of lines in the editor.
- */
 function updateLineNumbers() {
     const content = codeEditor.value;
     const numberOfLines = content.split('\n').length;
 
-    // Create an array of numbers [1, 2, 3, ...] and join them with <br> tags
     lineNumbers.innerHTML = Array(numberOfLines)
         .fill(0)
         .map((_, index) => index + 1)
         .join('<br>');
 }
 
-/**
- * Sends a request to the server to open a workspace directory.
- */
 async function openWorkspace() {
     const path = workspaceInput.value.trim();
     if (!path) return;
 
     try {
-        // Send POST request to /open endpoint
         const response = await fetch('/open', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -241,11 +235,9 @@ async function openWorkspace() {
         const data = await response.json();
 
         if (data.success) {
-            // If successful, switch to IDE screen and load files
             welcomeScreen.classList.remove('active');
             ideScreen.classList.add('active');
 
-            // Show the folder name as project name
             projectName.textContent = path.split('/').pop();
 
             loadFileTree();
@@ -257,16 +249,13 @@ async function openWorkspace() {
     }
 }
 
-/**
- * Fetches the list of files from the server and renders the file tree.
- */
 async function loadFileTree() {
     try {
         const response = await fetch('/files');
         const data = await response.json();
 
         if (data.files) {
-            fileTree.innerHTML = ''; // Clear existing tree
+            fileTree.innerHTML = '';
             const listContainer = document.createElement('ul');
             renderTreeNodes(data.files, listContainer);
             fileTree.appendChild(listContainer);
@@ -276,13 +265,7 @@ async function loadFileTree() {
     }
 }
 
-/**
- * Recursive function to render the file tree structure.
- * @param {Array} items - List of file/folder objects
- * @param {HTMLElement} container - The UL element to append to
- */
 function renderTreeNodes(items, container) {
-    // Sort items: Directories first, then files, both alphabetically
     items.sort((a, b) => {
         if (a.type === b.type) return a.name.localeCompare(b.name);
         return a.type === 'directory' ? -1 : 1;
@@ -290,36 +273,31 @@ function renderTreeNodes(items, container) {
 
     items.forEach(item => {
         const li = document.createElement('li');
-        li.className = item.type; // 'directory' or 'file'
+        li.className = item.type;
 
         if (item.type === 'directory') {
             li.textContent = '📁 ' + item.name;
 
-            // Create a nested list for children
             const childUl = document.createElement('ul');
-            childUl.style.display = 'none'; // Hidden by default (collapsed)
+            childUl.style.display = 'none';
 
             if (item.children) {
                 renderTreeNodes(item.children, childUl);
             }
 
-            // Toggle visibility on click
             li.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent triggering parent click events
+                e.stopPropagation();
                 childUl.style.display = childUl.style.display === 'none' ? 'block' : 'none';
             });
 
             container.appendChild(li);
             container.appendChild(childUl);
         } else {
-            // It's a file
             li.textContent = '📄 ' + item.name;
 
-            // Open file on click
             li.addEventListener('click', (e) => {
                 e.stopPropagation();
 
-                // Highlight the active file
                 document.querySelectorAll('.file-tree li.active').forEach(el => el.classList.remove('active'));
                 li.classList.add('active');
 
@@ -331,31 +309,31 @@ function renderTreeNodes(items, container) {
     });
 }
 
-/**
- * Fetches the content of a specific file from the server.
- * @param {string} path - Relative path of the file
- */
 async function loadFile(path) {
     try {
-        // Encode the path to ensure it's safe for URL
         const response = await fetch(`/file?path=${encodeURIComponent(path)}`);
         const data = await response.json();
 
         if (data.content !== undefined) {
-            codeEditor.value = data.content;
             currentFilePath = path;
             currentFilename.textContent = path;
-            updateLineNumbers();
-            updateHighlighting();
+
+            // Check if it's a media file
+            const filename = path.split('/').pop();
+            if (isMediaFile(filename)) {
+                displayMedia(path, filename);
+            } else {
+                hideMedia();
+                codeEditor.value = data.content;
+                updateLineNumbers();
+                updateHighlighting();
+            }
         }
     } catch (err) {
         alert('Error loading file');
     }
 }
 
-/**
- * Sends the current editor content to the server to save.
- */
 async function saveFile() {
     if (!currentFilePath) return;
 
@@ -371,7 +349,6 @@ async function saveFile() {
         const data = await response.json();
 
         if (data.success) {
-            // Show temporary "Saved!" message
             const originalText = saveBtn.textContent;
             saveBtn.textContent = 'Saved!';
             setTimeout(() => saveBtn.textContent = originalText, 2000);
@@ -383,9 +360,6 @@ async function saveFile() {
     }
 }
 
-/**
- * Requests the server to open the system terminal.
- */
 async function openTerminal() {
     try {
         const response = await fetch('/terminal', { method: 'POST' });

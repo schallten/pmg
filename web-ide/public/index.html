@@ -41,6 +41,9 @@
             <div class="editor-header">
                 <span id="current-filename">No file open</span>
                 <div class="actions">
+                    <button id="wrap-btn">Word Wrap</button>
+                    <button id="browser-btn">🌐 Browser</button>
+                    <button id="ai-chat-btn">🤖 AI Chat</button>
                     <button id="save-btn">Save (Ctrl+S)</button>
                     <button id="terminal-btn">Open Terminal</button>
                 </div>
@@ -51,6 +54,13 @@
                     <pre id="highlighting" aria-hidden="true"><code id="highlighting-content"></code></pre>
                     <textarea id="code-editor" spellcheck="false"></textarea>
                 </div>
+                <div id="media-preview" class="media-preview"></div>
+            </div>
+
+            <!-- Status Bar -->
+            <div id="status-bar" class="status-bar">
+                <span>Time: <span id="time-display">--:--:--</span></span>
+                <span>Speed: <span id="speed-display">--</span></span>
             </div>
         </div>
     </div>
@@ -71,7 +81,54 @@
         </div>
     </div>
 
-    <script type="module" src="app.js"></script>
+    <!-- Browser Modal -->
+    <div id="browser-modal" class="modal">
+        <div class="modal-content browser-modal-content">
+            <div class="modal-header">
+                <h2>Web Browser</h2>
+                <span class="close-btn" id="close-browser">&times;</span>
+            </div>
+            <div class="modal-body browser-body">
+                <iframe id="browser-iframe" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Chat Modal -->
+    <div id="ai-chat-modal" class="modal">
+        <div class="modal-content chat-modal-content">
+            <div class="modal-header">
+                <h2>AI Chat Assistant</h2>
+                <span class="close-btn" id="close-chat">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="api-key-section">
+                    <label for="ai-api-key">Gemini API Key:</label>
+                    <div class="input-group">
+                        <input type="password" id="ai-api-key" placeholder="Enter your Gemini API key">
+                        <button id="save-api-key">Save</button>
+                    </div>
+                    <small>Get your API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google
+                            AI Studio</a></small>
+                </div>
+
+                <div id="chat-messages" class="chat-messages"></div>
+
+                <div class="chat-input-section">
+                    <label>
+                        <input type="checkbox" id="include-code">
+                        Include current code as context
+                    </label>
+                    <div class="input-group">
+                        <textarea id="chat-input" placeholder="Ask a question about your code..." rows="3"></textarea>
+                        <button id="send-chat">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
 </body>
 
 </html>
