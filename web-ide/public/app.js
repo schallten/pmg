@@ -1,3 +1,5 @@
+import * as SyntaxHighlighter from './modules/core/highlight/syntax.js';
+
 // ==========================================
 // PMG - WEB IDE Client Side Logic
 // ==========================================
@@ -11,22 +13,132 @@ const openBtn = document.getElementById('open-btn');
 const errorMsg = document.getElementById('error-msg');
 const fileTree = document.getElementById('file-tree');
 const codeEditor = document.getElementById('code-editor');
+const highlighting = document.getElementById('highlighting');
+const highlightingContent = document.getElementById('highlighting-content');
 const lineNumbers = document.getElementById('line-numbers');
 const currentFilename = document.getElementById('current-filename');
 const saveBtn = document.getElementById('save-btn');
 const terminalBtn = document.getElementById('terminal-btn');
 const refreshBtn = document.getElementById('refresh-btn');
 const projectName = document.getElementById('project-name');
+const pluginCountEl = document.getElementById('plugin-count');
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const closeSettingsBtn = document.getElementById('close-settings');
+const pluginListEl = document.getElementById('plugin-list');
 
 // --- 2. State Variables ---
 // Variables to keep track of the current application state.
 let currentFilePath = null; // Stores the path of the currently open file
+let plugins = [];
 
-// --- 3. Event Listeners ---
+// --- 3. Plugin System ---
+
+function loadPlugins() {
+    // In a real system, this might fetch a list of modules dynamically.
+    // For now, we manually register our core modules.
+    plugins = [
+        SyntaxHighlighter
+    ];
+
+    // Update Welcome Screen
+    if (pluginCountEl) {
+        pluginCountEl.textContent = plugins.length;
+    }
+}
+
+function renderSettings() {
+    pluginListEl.innerHTML = '';
+
+    plugins.forEach((plugin, index) => {
+        const item = document.createElement('div');
+        item.className = 'plugin-item';
+
+        const name = plugin.getName ? plugin.getName() : 'Unknown Plugin';
+        const desc = plugin.getDescription ? plugin.getDescription() : 'No description available.';
+        const enabled = plugin.isEnabled ? plugin.isEnabled.value : false;
+
+        item.innerHTML = `
+            <div class="plugin-info">
+                <h4>${name}</h4>
+                <p>${desc}</p>
+            </div>
+            <label class="switch">
+                <input type="checkbox" ${enabled ? 'checked' : ''} data-index="${index}">
+                <span class="slider"></span>
+            </label>
+        `;
+
+        // Add event listener for toggle
+        const checkbox = item.querySelector('input');
+        checkbox.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            if (plugin.isEnabled) {
+                plugin.isEnabled.value = isChecked;
+                // Re-render highlighting if this is the syntax highlighter
+                if (currentFilePath) {
+                    updateHighlighting();
+                }
+            }
+        });
+
+        pluginListEl.appendChild(item);
+    });
+}
+
+// --- 4. Event Listeners ---
 // We listen for user actions like clicks and key presses.
+
+// Initialize Plugins
+loadPlugins();
+
+// Settings Modal
+if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+        renderSettings();
+        settingsModal.style.display = 'block';
+    });
+}
+
+if (closeSettingsBtn) {
+    closeSettingsBtn.addEventListener('click', () => {
+        settingsModal.style.display = 'none';
+    });
+}
+
+// Close modal when clicking outside
+window.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+        settingsModal.style.display = 'none';
+    }
+});
 
 // "Open Workspace" button click
 openBtn.addEventListener('click', openWorkspace);
+
+// "Browse" button click
+const browseBtn = document.getElementById('browse-btn');
+if (browseBtn) {
+    browseBtn.addEventListener('click', async () => {
+        try {
+            const response = await fetch('/browse');
+            const data = await response.json();
+
+            if (data.path) {
+                workspaceInput.value = data.path;
+                // Optional: Auto-open or just focus
+                workspaceInput.focus();
+            } else if (data.error) {
+                // If user cancelled, just ignore or show small message
+                if (data.error !== 'Selection cancelled') {
+                    errorMsg.textContent = data.error;
+                }
+            }
+        } catch (err) {
+            errorMsg.textContent = 'Failed to open file picker';
+        }
+    });
+}
 
 // Allow pressing "Enter" in the input field to open workspace
 workspaceInput.addEventListener('keypress', (e) => {
@@ -39,17 +151,37 @@ terminalBtn.addEventListener('click', openTerminal);
 refreshBtn.addEventListener('click', loadFileTree);
 
 // Editor interactions
-codeEditor.addEventListener('input', updateLineNumbers); // Update line numbers when typing
+codeEditor.addEventListener('input', () => {
+    updateLineNumbers();
+    updateHighlighting();
+});
 codeEditor.addEventListener('scroll', syncScroll); // Sync scroll between editor and line numbers
 codeEditor.addEventListener('keydown', handleEditorKeys); // Handle Tab and Ctrl+S
 
-// --- 4. Functions ---
+// --- 5. Functions ---
 
 /**
- * Syncs the scroll position of the line numbers with the code editor.
+ * Syncs the scroll position of the line numbers and highlighting with the code editor.
  */
 function syncScroll() {
     lineNumbers.scrollTop = codeEditor.scrollTop;
+    highlighting.scrollTop = codeEditor.scrollTop;
+    highlighting.scrollLeft = codeEditor.scrollLeft;
+}
+
+/**
+ * Updates the highlighting layer content.
+ */
+function updateHighlighting() {
+    let text = codeEditor.value;
+
+    // Handle final newline for proper scrolling/rendering match
+    if (text[text.length - 1] === "\n") {
+        text += " ";
+    }
+
+    // Use the plugin directly (it handles isEnabled check internally now)
+    highlightingContent.innerHTML = SyntaxHighlighter.highlight(text);
 }
 
 /**
@@ -68,6 +200,7 @@ function handleEditorKeys(e) {
         // Move cursor after the inserted spaces
         codeEditor.selectionStart = codeEditor.selectionEnd = start + 4;
         updateLineNumbers();
+        updateHighlighting();
     }
 
     // Handle 'Ctrl+S' (or Cmd+S on Mac) to save the file
@@ -213,6 +346,7 @@ async function loadFile(path) {
             currentFilePath = path;
             currentFilename.textContent = path;
             updateLineNumbers();
+            updateHighlighting();
         }
     } catch (err) {
         alert('Error loading file');

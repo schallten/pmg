@@ -133,6 +133,42 @@ app.post('/terminal', (req, res) => {
     res.json({ success: true, message: 'Terminal launch requested' });
 });
 
+// Browse Directory
+app.get('/browse', (req, res) => {
+    // Use zenity to pick a directory
+    // We use spawn to run the command
+    const child = spawn('zenity', ['--file-selection', '--directory']);
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => {
+        stdout += data.toString();
+    });
+
+    child.stderr.on('data', (data) => {
+        stderr += data.toString();
+    });
+
+    child.on('close', (code) => {
+        if (code === 0) {
+            const pathStr = stdout.trim();
+            if (pathStr) {
+                res.json({ path: pathStr });
+            } else {
+                res.status(400).json({ error: 'No directory selected' });
+            }
+        } else {
+            // Zenity returns non-zero if cancelled or failed
+            res.status(400).json({ error: 'Selection cancelled' });
+        }
+    });
+
+    child.on('error', (err) => {
+        res.status(500).json({ error: 'Zenity not found. Please install zenity (sudo apt install zenity).' });
+    });
+});
+
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });

@@ -49,14 +49,28 @@ body {
     width: 400px;
 }
 
+.input-group {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0;
+}
+
 .welcome-box input {
     width: 100%;
     padding: 10px;
-    margin: 10px 0;
     background: var(--bg-dark);
     border: 1px solid var(--border);
     color: var(--text-primary);
     border-radius: 4px;
+    flex: 1;
+    /* Take available space */
+}
+
+#browse-btn {
+    width: auto;
+    padding: 0 15px;
+    background: #444;
+    font-size: 1.2rem;
 }
 
 .welcome-box button {
@@ -196,18 +210,185 @@ body {
     overflow: hidden;
 }
 
-#code-editor {
+.editor-wrapper {
     flex: 1;
-    background: var(--bg-editor);
-    color: var(--text-primary);
-    border: none;
-    resize: none;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Both editor and highlighting layer must match exactly */
+#code-editor,
+#highlighting {
+    margin: 0;
     padding: 10px;
+    border: 0;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    box-sizing: border-box;
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 14px;
     line-height: 1.5;
-    outline: none;
-    white-space: pre;
-    overflow: auto;
     tab-size: 4;
+    overflow: auto;
+    white-space: pre;
+}
+
+/* The textarea is transparent and on top */
+#code-editor {
+    z-index: 1;
+    color: transparent;
+    background: transparent;
+    caret-color: var(--text-primary);
+    /* Cursor color */
+    outline: none;
+    resize: none;
+}
+
+/* The highlighting layer is behind */
+#highlighting {
+    z-index: 0;
+    color: var(--text-primary);
+    background: var(--bg-editor);
+    pointer-events: none;
+    /* Let clicks pass through to textarea */
+}
+
+/* Syntax Highlighting Tokens */
+.token.comment {
+    color: #6a9955;
+}
+
+.token.string {
+    color: #ce9178;
+}
+
+.token.number {
+    color: #b5cea8;
+}
+
+.token.keyword {
+    color: #569cd6;
+    font-weight: bold;
+}
+
+.token.operator {
+    color: #d4d4d4;
+}
+
+.token.function {
+    color: #dcdcaa;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: var(--bg-sidebar);
+    margin: 10% auto;
+    padding: 20px;
+    border: 1px solid var(--border);
+    width: 50%;
+    border-radius: 8px;
+    color: var(--text-primary);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.close-btn {
+    color: var(--text-secondary);
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close-btn:hover {
+    color: var(--text-primary);
+}
+
+/* Plugin List Styles */
+.plugin-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.plugin-info h4 {
+    margin-bottom: 5px;
+}
+
+.plugin-info p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* Toggle Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 20px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked+.slider {
+    background-color: var(--accent);
+}
+
+input:checked+.slider:before {
+    transform: translateX(20px);
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 15px;
 }
