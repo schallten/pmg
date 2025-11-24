@@ -23,6 +23,7 @@ const lineNumbers = document.getElementById('line-numbers');
 const currentFilename = document.getElementById('current-filename');
 const saveBtn = document.getElementById('save-btn');
 const terminalBtn = document.getElementById('terminal-btn');
+const newFileBtn = document.getElementById('new-file-btn');
 const refreshBtn = document.getElementById('refresh-btn');
 const wrapBtn = document.getElementById('wrap-btn');
 const projectName = document.getElementById('project-name');
@@ -146,6 +147,9 @@ workspaceInput.addEventListener('keypress', (e) => {
 // Toolbar buttons
 saveBtn.addEventListener('click', saveFile);
 terminalBtn.addEventListener('click', openTerminal);
+if (newFileBtn) {
+    newFileBtn.addEventListener('click', createNewFile);
+}
 refreshBtn.addEventListener('click', loadFileTree);
 
 // Word wrap toggle
@@ -275,8 +279,22 @@ function renderTreeNodes(items, container) {
         const li = document.createElement('li');
         li.className = item.type;
 
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'file-content';
+
         if (item.type === 'directory') {
-            li.textContent = '📁 ' + item.name;
+            contentSpan.textContent = '📁 ' + item.name;
+            li.appendChild(contentSpan);
+
+            const deleteBtn = document.createElement('span');
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.title = 'Delete';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteItem(item.path);
+            };
+            li.appendChild(deleteBtn);
 
             const childUl = document.createElement('ul');
             childUl.style.display = 'none';
@@ -293,7 +311,18 @@ function renderTreeNodes(items, container) {
             container.appendChild(li);
             container.appendChild(childUl);
         } else {
-            li.textContent = '📄 ' + item.name;
+            contentSpan.textContent = '📄 ' + item.name;
+            li.appendChild(contentSpan);
+
+            const deleteBtn = document.createElement('span');
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.title = 'Delete';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteItem(item.path);
+            };
+            li.appendChild(deleteBtn);
 
             li.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -370,5 +399,55 @@ async function openTerminal() {
         }
     } catch (err) {
         console.error('Failed to open terminal', err);
+    }
+}
+
+async function createNewFile() {
+    const filename = prompt('Enter file name (e.g., newfile.txt or folder/newfile.txt):');
+    if (!filename) return;
+
+    try {
+        const response = await fetch('/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: filename, type: 'file' })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            loadFileTree();
+            // Optionally open the new file
+            loadFile(filename);
+        } else {
+            alert('Failed to create file: ' + data.error);
+        }
+    } catch (err) {
+        alert('Error creating file');
+    }
+}
+
+async function deleteItem(path) {
+    if (!confirm(`Are you sure you want to delete ${path}?`)) return;
+
+    try {
+        const response = await fetch('/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            loadFileTree();
+            if (currentFilePath === path) {
+                currentFilePath = null;
+                codeEditor.value = '';
+                currentFilename.textContent = 'No file open';
+            }
+        } else {
+            alert('Failed to delete: ' + data.error);
+        }
+    } catch (err) {
+        alert('Error deleting item');
     }
 }

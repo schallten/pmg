@@ -127,10 +127,33 @@ body {
 .file-tree li {
     padding: 2px 5px;
     cursor: pointer;
-    white-space: nowrap;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.file-content {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
-    user-select: none;
+    white-space: nowrap;
+}
+
+.delete-btn {
+    opacity: 0;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0 5px;
+    transition: opacity 0.2s;
+}
+
+.file-tree li:hover .delete-btn {
+    opacity: 1;
+}
+
+.delete-btn:hover {
+    transform: scale(1.2);
 }
 
 .file-tree li:hover {

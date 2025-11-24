@@ -30,8 +30,8 @@
             <div class="sidebar-header">
                 <span id="project-name">Project</span>
                 <div class="sidebar-actions">
+                    <button id="new-file-btn" title="New File">➕</button>
                     <button id="refresh-btn" title="Refresh">↻</button>
-                    <button id="settings-btn" title="Settings">⚙️</button>
                 </div>
             </div>
             <div id="file-tree" class="file-tree"></div>
@@ -46,6 +46,7 @@
                     <button id="ai-chat-btn">🤖 AI Chat</button>
                     <button id="save-btn">Save (Ctrl+S)</button>
                     <button id="terminal-btn">Open Terminal</button>
+                    <button id="settings-btn">⚙️ Settings</button>
                 </div>
             </div>
             <div class="editor-container">
@@ -59,6 +60,8 @@
 
             <!-- Status Bar -->
             <div id="status-bar" class="status-bar">
+                <span>CPU: <span id="cpu-display">--%</span></span>
+                <span>RAM: <span id="ram-display">--%</span></span>
                 <span>Time: <span id="time-display">--:--:--</span></span>
                 <span>Speed: <span id="speed-display">--</span></span>
             </div>

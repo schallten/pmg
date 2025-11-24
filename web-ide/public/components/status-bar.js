@@ -7,6 +7,8 @@ export function initStatusBar() {
     const statusBar = document.getElementById('status-bar');
     const timeDisplay = document.getElementById('time-display');
     const speedDisplay = document.getElementById('speed-display');
+    const cpuDisplay = document.getElementById('cpu-display');
+    const ramDisplay = document.getElementById('ram-display');
 
     if (!statusBar || !timeDisplay || !speedDisplay) {
         console.warn('Status bar elements not found');
@@ -36,13 +38,31 @@ export function initStatusBar() {
         }
     }
 
+    // Update system resources
+    async function updateResources() {
+        if (!cpuDisplay || !ramDisplay) return;
+
+        try {
+            const response = await fetch('/resources');
+            if (response.ok) {
+                const data = await response.json();
+                cpuDisplay.textContent = `${data.cpu}%`;
+                ramDisplay.textContent = `${data.ram}%`;
+            }
+        } catch (err) {
+            console.error('Failed to fetch resources', err);
+        }
+    }
+
     // Initial update
     updateTime();
     updateSpeed();
+    updateResources();
 
     // Set up intervals
     setInterval(updateTime, 1000);
     setInterval(updateSpeed, 5000);
+    setInterval(updateResources, 2000);
 
     // Listen for online/offline events
     window.addEventListener('online', updateSpeed);

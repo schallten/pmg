@@ -194,5 +194,82 @@ def browse_directory():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/create', methods=['POST'])
+def create_item():
+    if not current_workspace:
+        return jsonify({'error': 'No workspace open'}), 400
+    
+    data = request.get_json()
+    item_path = data.get('path')
+    item_type = data.get('type', 'file') # default to file
+    
+    if not item_path:
+        return jsonify({'error': 'Path is required'}), 400
+        
+    try:
+        full_path = os.path.join(current_workspace, item_path)
+        
+        # Security check
+        if not os.path.commonpath([current_workspace, full_path]).startswith(current_workspace):
+             return jsonify({'error': 'Access denied'}), 403
+        
+        if os.path.exists(full_path):
+            return jsonify({'error': 'File or directory already exists'}), 400
+            
+        if item_type == 'directory':
+            os.makedirs(full_path)
+        else:
+            # Ensure parent directory exists
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, 'w', encoding='utf-8') as f:
+                f.write('') # Create empty file
+                
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/delete', methods=['POST'])
+def delete_item():
+    if not current_workspace:
+        return jsonify({'error': 'No workspace open'}), 400
+    
+    data = request.get_json()
+    item_path = data.get('path')
+    
+    if not item_path:
+        return jsonify({'error': 'Path is required'}), 400
+        
+    try:
+        full_path = os.path.join(current_workspace, item_path)
+        
+        # Security check
+        if not os.path.commonpath([current_workspace, full_path]).startswith(current_workspace):
+             return jsonify({'error': 'Access denied'}), 403
+        
+        if not os.path.exists(full_path):
+            return jsonify({'error': 'File or directory not found'}), 404
+            
+        if os.path.isdir(full_path):
+            import shutil
+            shutil.rmtree(full_path)
+        else:
+            os.remove(full_path)
+            
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/resources', methods=['GET'])
+def get_resources():
+    try:
+        import psutil
+        cpu_percent = psutil.cpu_percent(interval=None)
+        ram_percent = psutil.virtual_memory().percent
+        return jsonify({'cpu': cpu_percent, 'ram': ram_percent})
+    except ImportError:
+        return jsonify({'error': 'psutil not installed'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(port=3000, debug=True)
