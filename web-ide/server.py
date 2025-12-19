@@ -3,6 +3,7 @@ import subprocess
 import platform
 from flask import Flask, request, jsonify, send_file
 import logging
+import json
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 
@@ -11,6 +12,33 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 current_workspace = None
+RECENT_WORKSPACES_FILE = 'recent_workspaces.json'
+
+def load_recent_workspaces():
+    if not os.path.exists(RECENT_WORKSPACES_FILE):
+        return []
+    try:
+        with open(RECENT_WORKSPACES_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_recent_workspace(path):
+    recent = load_recent_workspaces()
+    # Remove if exists to move to top
+    if path in recent:
+        recent.remove(path)
+    # Add to top
+    recent.insert(0, path)
+    # Keep only last 5
+    recent = recent[:5]
+    
+    try:
+        with open(RECENT_WORKSPACES_FILE, 'w') as f:
+            json.dump(recent, f)
+    except Exception as e:
+        logger.error(f"Failed to save recent workspaces: {e}")
+
 
 def read_dir_recursive(directory):
     results = []
@@ -48,6 +76,10 @@ def read_dir_recursive(directory):
 def index():
     return app.send_static_file('index.html')
 
+@app.route('/recent', methods=['GET'])
+def get_recent_workspaces():
+    return jsonify(load_recent_workspaces())
+
 @app.route('/open', methods=['POST'])
 def open_workspace():
     global current_workspace
@@ -61,6 +93,7 @@ def open_workspace():
         return jsonify({'error': 'Path is not a directory'}), 400
     
     current_workspace = folder_path
+    save_recent_workspace(current_workspace)
     return jsonify({'success': True, 'path': current_workspace})
 
 @app.route('/files', methods=['GET'])
@@ -176,21 +209,91 @@ def open_terminal():
 @app.route('/browse', methods=['GET'])
 def browse_directory():
     try:
-        # Using zenity as in the original nodejs version
-        process = subprocess.Popen(['zenity', '--file-selection', '--directory'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate()
+        system = platform.system()
+        path_str = None
         
-        if process.returncode == 0:
-            path_str = stdout.decode('utf-8').strip()
-            if path_str:
-                return jsonify({'path': path_str})
-            else:
-                return jsonify({'error': 'No directory selected'}), 400
-        else:
-            return jsonify({'error': 'Selection cancelled'}), 400
+        if system == 'Windows':
+            # Windows: Use PowerShell folder browser dialog
+            ps_script = """
+Add-Type -AssemblyName System.Windows.Forms
+$folderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
+$folderBrowser.Description = 'Select a folder'
+$folderBrowser.RootFolder = 'MyComputer'
+if ($folderBrowser.ShowDialog() -eq 'OK') {
+    Write-Output $folderBrowser.SelectedPath
+}
+"""
+            process = subprocess.Popen(
+                ['powershell', '-Command', ps_script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            stdout, stderr = process.communicate()
+            path_str = stdout.strip()
             
-    except FileNotFoundError:
-        return jsonify({'error': 'Zenity not found. Please install zenity (sudo apt install zenity).'}), 500
+        elif system == 'Darwin':  # macOS
+            # macOS: Use AppleScript
+            applescript = 'POSIX path of (choose folder with prompt "Select a folder")'
+            process = subprocess.Popen(
+                ['osascript', '-e', applescript],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            stdout, stderr = process.communicate()
+            if process.returncode == 0:
+                path_str = stdout.strip()
+            
+        else:  # Linux
+            # Try multiple Linux options in order of preference
+            dialog_commands = [
+                # KDE
+                ['kdialog', '--getexistingdirectory', '.'],
+                # GNOME/GTK
+                ['zenity', '--file-selection', '--directory'],
+                # Generic X11
+                ['qarma', '--file-selection', '--directory'],
+                # Fallback: yad
+                ['yad', '--file', '--directory']
+            ]
+            
+            for cmd in dialog_commands:
+                try:
+                    process = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    stdout, stderr = process.communicate()
+                    if process.returncode == 0:
+                        path_str = stdout.strip()
+                        break
+                except FileNotFoundError:
+                    continue
+            
+            if path_str is None:
+                return jsonify({
+                    'error': 'No dialog tool found. Please install one of: zenity, kdialog, qarma, or yad'
+                }), 500
+        
+        # Common response handling
+        if path_str:
+            return jsonify({'path': path_str})
+        else:
+            return jsonify({'error': 'No directory selected'}), 400
+            
+    except FileNotFoundError as e:
+        system = platform.system()
+        if system == 'Windows':
+            error_msg = 'PowerShell not found'
+        elif system == 'Darwin':
+            error_msg = 'osascript not found (macOS required)'
+        else:
+            error_msg = 'No dialog tool found. Install: sudo apt install zenity'
+        return jsonify({'error': error_msg}), 500
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

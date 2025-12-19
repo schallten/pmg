@@ -96,6 +96,7 @@ loadPlugins();
 initStatusBar();
 initAIChatUI();
 initBrowserModal();
+loadRecentWorkspaces();
 
 // Settings Modal
 if (settingsBtn) {
@@ -103,6 +104,37 @@ if (settingsBtn) {
         renderSettings();
         settingsModal.style.display = 'block';
     });
+}
+
+function loadRecentWorkspaces() {
+    const container = document.getElementById('recent-workspaces-container');
+    const list = document.getElementById('recent-list');
+
+    if (!container || !list) return;
+
+    fetch('/recent')
+        .then(res => res.json())
+        .then(workspaces => {
+            if (workspaces.length > 0) {
+                container.style.display = 'block';
+                list.innerHTML = '';
+
+                workspaces.forEach(path => {
+                    const item = document.createElement('div');
+                    item.className = 'recent-item';
+                    item.textContent = path;
+                    item.title = path;
+                    item.onclick = () => {
+                        workspaceInput.value = path;
+                        openWorkspace();
+                    };
+                    list.appendChild(item);
+                });
+            } else {
+                container.style.display = 'none';
+            }
+        })
+        .catch(err => console.error('Failed to load recent workspaces', err));
 }
 
 if (closeSettingsBtn) {
