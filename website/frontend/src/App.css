@@ -1,42 +1,72 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* ===== Global ===== */
+body {
+  margin: 0;
+  background-color: #0f1419;   
+  color: #e6edf3;              
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* ===== Header ===== */
+.header_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #30363d;
+  background-color: #0f1419;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.header_nav {
+  display: flex;
+  gap: 1.25rem;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.header_nav a {
+  color: #8b949e;              
+  text-decoration: none;
+  font-size: 0.95rem;
 }
 
-.card {
-  padding: 2em;
+.header_nav a:hover {
+  color: #4aa3ff;              
 }
 
-.read-the-docs {
-  color: #888;
+/* ===== Hero ===== */
+.hero {
+  padding: 3rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
 }
+
+.hero_left_image {
+  width: 25%;
+  height: 300px;
+  object-fit: cover;
+  border-radius: 1.5rem;
+  flex-shrink: 0;
+  background-color: #161b22;   
+}
+
+/* ===== Text ===== */
+.hero_right_text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.hero_right_text h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #e6edf3;
+}
+
+.hero_right_text p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #8b949e;
+}
+
+
