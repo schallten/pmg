@@ -91,6 +91,23 @@ func ExecuteInit() {
 		return
 	}
 
+	fmt.Println("Enter username as used on website :")
+	var author string
+	fmt.Scanln(&author)
+	// save name in file 
+	authorFile, err := os.Create("./vcs/author.txt")
+	if err != nil {
+		fmt.Println("error creating author file:", err)
+		return
+	}
+	defer authorFile.Close()
+
+	_, err = authorFile.WriteString(author)
+	if err != nil {
+		fmt.Println("error writing to author file:", err)
+		return
+	}
+
 	// create configured.txt file to indicate initialization
 	file, err := os.Create("./vcs/configured.txt")
 	if err != nil {
@@ -274,6 +291,10 @@ func ExecuteCommit() {
 	commitID := uuid.New().String()
 	fmt.Println("Commit ID:", commitID)
 
+	// get author name from file
+	author,err := os.ReadFile("./vcs/author.txt")
+
+
 	scanner := bufio.NewScanner(stagedFile)
 	fileCount := 0
 	for scanner.Scan() {
@@ -289,7 +310,7 @@ func ExecuteCommit() {
 			hash,
 			os.Geteuid(),
 			commitMsg,
-			"local_user",
+			author,
 			commitID,
 		)
 

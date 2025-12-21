@@ -1,5 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException, Header, File, UploadFile, Form
+from fastapi.responses import FileResponse
+from fastapi.background import BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+import shutil
+import zipfile
 import os
 from dotenv import load_dotenv
 from datetime import datetime
@@ -206,6 +210,7 @@ def signup(
         "api_key": new_user.api_key
     }
 
+
 @app.post("/api/login")
 def login(
     username: str = Form(...),
@@ -225,6 +230,7 @@ def login(
         "api_key": user.api_key
     }
 
+
 @app.post("/api/push/file")
 async def push_file(
     commit_id: str = Form(...),
@@ -238,13 +244,11 @@ async def push_file(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> dict[str, str]:
-    
     try:
-        # Read file content
+        # Read and verify file
         file_content = await file.read()
-        
-        # Verify hash
         calculated_hash = hashlib.sha256(file_content).hexdigest()
+        
         if calculated_hash != hash:
             raise HTTPException(status_code=400, detail="File hash mismatch - file may be corrupted")
         
@@ -272,15 +276,27 @@ async def push_file(
             db.add(commit)
             db.flush()
         
-        # Create storage directory
-        storage_dir = os.path.join("storage", "files", hash[:2])
-        os.makedirs(storage_dir, exist_ok=True)
-        storage_path = os.path.join(storage_dir, hash)
+        # Define storage paths
+        username = user.username  # Assuming User model has username field
+        project_storage = os.path.join("storage", "files", username, project_name)
+        file_path_full = os.path.join(project_storage, path)
         
-        # Save file (deduplication - only save if doesn't exist)
-        if not os.path.exists(storage_path):
-            with open(storage_path, "wb") as f:
-                f.write(file_content)
+        os.makedirs(os.path.dirname(file_path_full), exist_ok=True)
+        
+        # Backup existing file if it exists
+        if os.path.exists(file_path_full):
+            history_dir = os.path.join(project_storage, ".history", commit_id)
+            os.makedirs(history_dir, exist_ok=True)
+            
+            backup_path = os.path.join(history_dir, path)
+            os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+            
+            # Move old file to history
+            shutil.copy2(file_path_full, backup_path)
+        
+        # Save new file
+        with open(file_path_full, "wb") as f:
+            f.write(file_content)
         
         # Create file record
         file_record = FileRecord(
@@ -288,14 +304,13 @@ async def push_file(
             path=path,
             hash=hash,
             last_updated=last_updated,
-            storage_path=storage_path,
+            storage_path=file_path_full,
             file_size=len(file_content)
         )
         db.add(file_record)
         
-        # Update project last_updated
+        # Update project timestamp
         project.last_updated = datetime.utcnow()
-        
         db.commit()
         
         return {
@@ -311,3 +326,101 @@ async def push_file(
         db.rollback()
         print(f"Error uploading file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+    
+
+@app.post("/api/pull/{username}/{project_name}")
+def pull_project(
+    username: str,
+    project_name: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        project_owner = db.query(User).filter(User.username == username).first()
+
+        if not project_owner:
+            raise HTTPException(status_code=404, detail="Project owner not found")
+        
+        project = db.query(Project).filter(
+            Project.user_id == project_owner.id,
+            Project.project_name == project_name
+        ).first()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        project_dir = os.path.join("storage", "files", username, project_name)
+
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail="Project files not found on server")
+        
+        # creating temporary zip file
+        zip_filename = f"{project_name}.zip"
+        zip_filepath = os.path.join("temp", zip_filename)
+        os.makedirs("temp", exist_ok=True)
+
+        # we create zip file ignoring  the .history folder
+        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root,dirs,files in os.walk(project_dir):
+                if '.history' in root.split(os.sep):
+                    continue
+
+                if '.history' in dirs:
+                    dirs.remove('.history')
+
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, project_dir)
+                    zipf.write(file_path, arcname)
+
+        return FileResponse(
+            path=zip_filepath,
+            filename = zip_filename,
+            media_type='application/zip',
+            background=BackgroundTasks(lambda: os.remove(zip_filepath))
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error pulling project: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to pull project: {str(e)}")
+
+@app.post("/api/fetch/{username}/{project_name}")
+def fetch_latest_commit(
+    username: str,
+    project_name: str,
+    db: Session = Depends(get_db)
+):
+    try:
+        project_owner = db.query(User).filter(User.username == username).first()
+        if not project_owner:
+            raise HTTPException(status_code=404, detail="Project owner not found")
+        
+        project = db.query(Project).filter(
+            Project.user_id == project_owner.id,
+            Project.project_name == project_name
+        ).first()
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        latest_commit = db.query(Commit).filter(
+            Commit.project_id == project.id
+        ).order_by(Commit.created_at.desc()).first()
+        
+        if not latest_commit:
+            return {
+                "message": "No commits found for this project"
+            }
+        
+        return {
+            "latest_commit_id": latest_commit.commit_id,
+            "timestamp": latest_commit.created_at.isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching latest commit: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch latest commit: {str(e)}")
