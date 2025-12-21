@@ -8,7 +8,7 @@ import zipfile
 import os
 from dotenv import load_dotenv
 from datetime import datetime
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from typing import Generator, Optional
 import hashlib
 from sqlalchemy import (
@@ -26,6 +26,9 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and "+asyncpg" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("+asyncpg", "+psycopg2")
+
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is not set")
 
@@ -110,8 +113,18 @@ def init_db() -> None:
     print("Database tables created successfully")
 
 
+# Lifespan context manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Starting up...")
+    init_db()
+    yield
+    print("Shutting down...")
+    engine.dispose()
+
+
 # Create FastAPI app
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # CORS middleware
 origins = [
@@ -128,18 +141,7 @@ app.add_middleware(
 )
 
 
-# Startup event
-@app.on_event("startup")
-def startup_event() -> None:
-    print("Starting up...")
-    init_db()
 
-
-# Shutdown event
-@app.on_event("shutdown")
-def shutdown_event() -> None:
-    print("Shutting down...")
-    engine.dispose()
 
 
 # Dependency to get database session
@@ -454,7 +456,6 @@ def search_projects(
     except Exception as e:
         print(f"Error searching projects: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to search projects: {str(e)}")
-):
 
 @app.get("/api/repo/{username}/{project_name}")
 def get_repository(

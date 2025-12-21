@@ -5,7 +5,7 @@ import (
     "os"
 )
 
-var ConfigFile = "./vcs/configured.txt"
+var ConfigFile = ".pmg/configured.txt"
 
 func CheckConfigured() bool {
     _, err := os.Stat(ConfigFile)

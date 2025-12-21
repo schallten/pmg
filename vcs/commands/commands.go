@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"vcs/auth"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -18,7 +19,7 @@ import (
 const maxFileSize = 5 * 1024 * 1024 // 5 MB
 
 func initDB() (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", "./vcs/vcs.db")
+	db, err := sql.Open("sqlite3", ".pmg/vcs.db")
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,7 @@ func hashFileContents(path string) (string, error) {
 
 // GetProjectName reads the project name from the configuration file
 func GetProjectName() (string, error) {
-	data, err := os.ReadFile("./vcs/project_name.txt")
+	data, err := os.ReadFile(".pmg/project_name.txt")
 	if err != nil {
 		return "", err
 	}
@@ -75,6 +76,12 @@ func ExecuteCommand(command string) {
 		ExecuteAdd()
 	case "commit":
 		ExecuteCommit()
+	case "push":
+		auth.PushCommit("")
+	case "pull":
+		auth.Pull()
+	case "fetch":
+		auth.Fetch()
 	default:
 		fmt.Println("invalid command")
 	}
@@ -83,19 +90,20 @@ func ExecuteCommand(command string) {
 /* COMMANDS */
 func ExecuteInit() {
 	fmt.Println("initializing PMG VCS...")
-	initDB()
 	// create folder and files for initial configuration
-	err := os.MkdirAll("./vcs", os.ModePerm)
+	err := os.MkdirAll(".pmg", os.ModePerm)
 	if err != nil {
 		fmt.Println("error creating vcs directory:", err)
 		return
 	}
 
+	initDB()
+
 	fmt.Println("Enter username as used on website :")
 	var author string
 	fmt.Scanln(&author)
 	// save name in file 
-	authorFile, err := os.Create("./vcs/author.txt")
+	authorFile, err := os.Create(".pmg/author.txt")
 	if err != nil {
 		fmt.Println("error creating author file:", err)
 		return
@@ -109,7 +117,7 @@ func ExecuteInit() {
 	}
 
 	// create configured.txt file to indicate initialization
-	file, err := os.Create("./vcs/configured.txt")
+	file, err := os.Create(".pmg/configured.txt")
 	if err != nil {
 		fmt.Println("error creating configuration file:", err)
 		return
@@ -130,7 +138,7 @@ func ExecuteInit() {
 	var projectName string
 	fmt.Scanln(&projectName)
 	// save to file
-	projectFile, err := os.Create("./vcs/project_name.txt")
+	projectFile, err := os.Create(".pmg/project_name.txt")
 	if err != nil {
 		fmt.Println("error creating project name file:", err)
 		return
@@ -154,32 +162,28 @@ func ExecuteAdd() {
 	fmt.Println("adding files to PMG VCS...")
 
 	ignoreFile, err := os.Open("ignore.txt")
-
-	if err != nil {
-		fmt.Println("error opening ignore.txt file:", err)
-		return
-	}
-
-	defer ignoreFile.Close()
-
 	ignoreMap := make(map[string]bool)
 
-	scanner := bufio.NewScanner(ignoreFile)
-	for scanner.Scan() {
-		ignoreMap[scanner.Text()] = true
-	}
-
-	if err := scanner.Err(); err != nil {
-		fmt.Println("error reading ignore file:", err)
+	if err == nil {
+		defer ignoreFile.Close()
+		scanner := bufio.NewScanner(ignoreFile)
+		for scanner.Scan() {
+			ignoreMap[scanner.Text()] = true
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Println("error reading ignore file:", err)
+		}
+	} else if !os.IsNotExist(err) {
+		fmt.Println("error opening ignore.txt file:", err)
 	}
 
 	// ensure vcs directory exists for staged file
-	if err := os.MkdirAll("./vcs", os.ModePerm); err != nil {
+	if err := os.MkdirAll(".pmg", os.ModePerm); err != nil {
 		fmt.Println("error creating vcs directory:", err)
 		return
 	}
 
-	stagedFile, sfErr := os.OpenFile("./vcs/staged_files.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	stagedFile, sfErr := os.OpenFile(".pmg/staged_files.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if sfErr != nil {
 		fmt.Println("error opening staged_files.txt file:", sfErr)
 		return
@@ -195,7 +199,7 @@ func ExecuteAdd() {
 			return nil
 		}
 
-		if ignoreMap[path] {
+		if ignoreMap[path] || strings.HasPrefix(path, ".pmg") || strings.Contains(path, "/.pmg") {
 			fmt.Println("ignoring file:", path)
 			return nil
 		}
@@ -264,7 +268,7 @@ func ExecuteCommit() {
 	}
 	
 	// Read staged changes file
-	stagedFile, err := os.Open("./vcs/staged_files.txt")
+	stagedFile, err := os.Open(".pmg/staged_files.txt")
 	if err != nil {
 		fmt.Println("error opening staged_files.txt file:", err)
 		return
@@ -292,7 +296,7 @@ func ExecuteCommit() {
 	fmt.Println("Commit ID:", commitID)
 
 	// get author name from file
-	author,err := os.ReadFile("./vcs/author.txt")
+	author,err := os.ReadFile(".pmg/author.txt")
 
 
 	scanner := bufio.NewScanner(stagedFile)
@@ -326,7 +330,7 @@ func ExecuteCommit() {
 	}
 
 	// Clear staged files
-	os.Truncate("./vcs/staged_files.txt", 0)
+	os.Truncate(".pmg/staged_files.txt", 0)
 	
 	fmt.Printf("Commit successful! %d file(s) committed with ID: %s\n", fileCount, commitID)
 	fmt.Println("Run 'push' command to push to server")

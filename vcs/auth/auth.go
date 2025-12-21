@@ -13,12 +13,11 @@ import (
 	"path/filepath"
 	"strings"
 	"vcs/checker"
-	"vcs/commands"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const server_url = "http://localhost:3000/"
+const server_url = "http://localhost:8000/"
 
 func AuthenticateUser() {
 	configured := checker.CheckConfigured()
@@ -27,7 +26,7 @@ func AuthenticateUser() {
 		return
 	}
 	fmt.Println("PMG is configured and ready to track your files")
-	data, err := os.ReadFile("./vcs/configured.txt")
+	data, err := os.ReadFile(".pmg/configured.txt")
 	if err != nil {
 		fmt.Println("error reading configuration:", err)
 		return
@@ -55,7 +54,7 @@ func AuthenticateUser() {
 
 func PushCommit(commitID string) {
 	fmt.Println("Pushing commit", commitID, "to server...")
-	db, err := sql.Open("sqlite3", "./vcs/vcs.db")
+	db, err := sql.Open("sqlite3", ".pmg/vcs.db")
 	if err != nil {
 		fmt.Println("error opening database:", err)
 		return
@@ -95,7 +94,7 @@ func PushCommit(commitID string) {
 	defer rows.Close()
 
 	// Read API token
-	data, err := os.ReadFile("./vcs/configured.txt")
+	data, err := os.ReadFile(".pmg/configured.txt")
 	if err != nil {
 		fmt.Println("error reading configuration:", err)
 		return
@@ -103,12 +102,12 @@ func PushCommit(commitID string) {
 	token := strings.TrimSpace(string(data))
 
 	// Read project name
-	projectName, err := commands.GetProjectName()
+	// Read project name
+	projectName, err := GetProjectName()
 	if err != nil {
 		fmt.Println("error reading project name:", err)
 		return
 	}
-
 	// Check if repository config exists, if not prompt for username
 	username, _, err := GetRepositoryConfig()
 	if err != nil {
@@ -260,7 +259,7 @@ func Pull() {
 		fmt.Printf("Using repository: %s/%s\n", username, projectName)
 	}
 
-	data, err := os.ReadFile("./vcs/configured.txt")
+	data, err := os.ReadFile(".pmg/configured.txt")
 	if err != nil {
 		fmt.Println("error reading configuration:", err)
 		return
@@ -290,7 +289,7 @@ func Pull() {
 		return
 	}
 
-	tempDir := "./vcs/temp_full"
+	tempDir := ".pmg/temp_full"
 	os.RemoveAll(tempDir) // clean up old remains
 	err = os.MkdirAll(tempDir, os.ModePerm)
 	if err != nil {
@@ -325,7 +324,7 @@ func Pull() {
 	fmt.Println("Pull completed successfully.")
 }
 
-func fetcb(){
+func Fetch(){
 	username,projectName,err := GetRepositoryConfig()
 
 	if err!=nil{
@@ -394,7 +393,7 @@ func fetcb(){
 	fmt.Printf("Latest commit on server: %s at %d\n",serverCommitID,serverUnixTime)
 
 	// get local latest commit
-	db,err := sql.Open("sqlite3","./vcs/vcs.db")
+	db,err := sql.Open("sqlite3",".pmg/vcs.db")
 	if err!=nil{
 		fmt.Println("error opening database:",err)
 		return
@@ -527,15 +526,33 @@ func extractZip(zipPath, destDir string) error {
 }
 
 // Save repository info to config file
+// GetProjectName returns the project name either from a small project file or by using the current directory name.
+func GetProjectName() (string, error) {
+	// First try to read a dedicated project name file
+	if data, err := os.ReadFile(".pmg/project.txt"); err == nil {
+		name := strings.TrimSpace(string(data))
+		if name != "" {
+			return name, nil
+		}
+	}
+
+	// Fallback to the current working directory name
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("could not determine project name: %w", err)
+	}
+	return filepath.Base(wd), nil
+}
+
+// Save repository info to config file
 func SaveRepositoryConfig(username, projectName string) error {
-	configPath := "./vcs/repository.txt"
+	configPath := ".pmg/repository.txt"
 	content := fmt.Sprintf("%s/%s", username, projectName)
 	return os.WriteFile(configPath, []byte(content), 0644)
 }
-
 // Get repository info from config file
 func GetRepositoryConfig() (username, projectName string, err error) {
-	configPath := "./vcs/repository.txt"
+	configPath := ".pmg/repository.txt"
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return "", "", err
