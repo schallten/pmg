@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Header, File, UploadFile, F
 from fastapi.responses import FileResponse
 from fastapi.background import BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+import base64
 import shutil
 import zipfile
 import os
@@ -424,3 +425,270 @@ def fetch_latest_commit(
     except Exception as e:
         print(f"Error fetching latest commit: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch latest commit: {str(e)}")
+    
+@app.get("/api/search/{query}")
+def search_projects(
+    query: str,
+    db: Session = Depends(get_db)
+):
+    try:
+        projects = db.query(Project).filter(Project.project_name.ilike(f"%{query}%")).all()
+        
+        result = []
+        for project in projects:
+            owner = db.query(User).filter(User.id == project.user_id).first()
+            if not owner:
+                continue
+            result.append({
+                "username": owner.username,
+                "project_name": project.project_name,
+                "created_at": project.created_at.isoformat(),
+                "last_updated": project.last_updated.isoformat(),
+                "view_url": f"/api/repo/{owner.username}/{project.project_name}"
+            })
+        
+        return {
+            "results": result
+        }
+    
+    except Exception as e:
+        print(f"Error searching projects: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to search projects: {str(e)}")
+):
+
+@app.get("/api/repo/{username}/{project_name}")
+def get_repository(
+    username: str,
+    project_name: str,
+    db: Session = Depends(get_db)
+):
+    try:
+        project_owner = db.query(User).filter(User.username == username).first()
+
+        if not project_owner:
+            raise HTTPException(status_code=404, detail="Project owner not found")
+        
+        project = db.query(Project).filter(
+            Project.user_id == project_owner.id,
+            Project.project_name == project_name
+        ).first()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # we will only show latest commit by default
+        latest_commit = db.query(Commit).filter(
+            Commit.project_id == project.id
+        ).order_by(Commit.created_at.desc()).first()
+
+        # getting the project directory
+        project_dir = os.path.join("storage", "files", username, project_name)
+
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail="Project files not found on server")
+        
+        files = []
+        for root, dirs, file_names in os.walk(project_dir):
+            if '.history' in root.split(os.sep):
+                continue
+
+            if '.history' in dirs:
+                dirs.remove('.history')
+
+            for filename in file_names:
+                file_path = os.path.join(root, filename)
+                relative_path = os.path.relpath(file_path, project_dir).replace(os.sep, '/')
+                files.append({
+                    "path": relative_path,
+                    "size": os.path.getsize(file_path)
+                })
+
+        readme_content = None
+        for readme_name in ["README.md", "readme.md", "Readme.md"]:
+            readme_path = os.path.join(project_dir, readme_name)
+            if os.path.exists(readme_path):
+                with open(readme_path, "r", encoding="utf-8") as f:
+                    readme_content = f.read()
+                break
+        
+        return {
+            "username": username,
+            "project_name": project_name,
+            "created_at": project.created_at.isoformat(),
+            "last_updated": project.last_updated.isoformat(),
+            "latest_commit": {
+                "id": latest_commit.commit_id,
+                "message": latest_commit.commit_message,
+                "author": latest_commit.author,
+                "date": latest_commit.created_at.isoformat()
+            } if latest_commit else None,
+            "files": files,
+            "readme": readme_content
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting repository info: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get repository info: {str(e)}")
+    
+@app.get("/api/repo/{username}/{project_name}/file/{file_path:path}")
+def get_file(
+    username: str,
+    project_name : str,
+    file_path: str
+):
+    try:
+        full_path = os.path.join("storage","files",username,project_name,file_path)
+
+        if not os.path.exists(full_path):
+            raise HTTPException(status_code=404,detail="File not found")
+        
+        try:
+            with open(full_path,"r",encoding="utf-8") as f:
+                content = f.read()
+            return {
+                "path": file_path,
+                "content": content,
+                "type": "text"
+            }
+        except:
+            with open(full_path,"rb") as f:
+                return {
+                    "path": file_path,
+                    "content": base64.b64encode(f.read()).decode('utf-8'),
+                    "type": "binary"
+                }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get file: {str(e)}")
+    
+@app.get("/api/repo/{username}/{project_name}/commits")
+def list_commits(
+    username: str,
+    project_name: str,
+    db: Session = Depends(get_db)
+):
+    try:
+        project_owner = db.query(User).filter(User.username == username).first()
+
+        if not project_owner:
+            raise HTTPException(status_code=404, detail="Project owner not found")
+        
+        project = db.query(Project).filter(
+            Project.user_id == project_owner.id,
+            Project.project_name == project_name
+        ).first()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        commits = db.query(Commit).filter(
+            Commit.project_id == project.id
+        ).order_by(Commit.created_at.desc()).all()
+        
+        commit_list = []
+        for commit in commits:
+            commit_list.append({
+                "id": commit.commit_id,
+                "message": commit.commit_message,
+                "author": commit.author,
+                "date": commit.created_at.isoformat()
+            })
+        
+        return {
+            "project_name": project_name,
+            "commits": commit_list
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error listing commits: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to list commits: {str(e)}")
+    
+@app.get("/api/repo/{username}/{project_name}/languages")
+def get_languages_list(
+    username: str,
+    project_name: str,
+    db: Session = Depends(get_db)
+):
+    # return a list of how much percentage of each programming language is used in the project
+    try:
+        project_owner = db.query(User).filter(User.username == username).first()
+
+        if not project_owner:
+            raise HTTPException(status_code=404, detail="Project owner not found")
+        
+        project = db.query(Project).filter(
+            Project.user_id == project_owner.id,
+            Project.project_name == project_name
+        ).first()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        project_dir = os.path.join("storage", "files", username, project_name)
+
+        if not os.path.exists(project_dir):
+            raise HTTPException(status_code=404, detail="Project files not found on server")
+        
+        language_extensions = {
+            '.py': 'Python',
+            '.js': 'JavaScript',
+            '.ts': 'TypeScript',
+            '.java': 'Java',
+            '.cpp': 'C++',
+            '.c': 'C',
+            '.cs': 'C#',
+            '.rb': 'Ruby',
+            '.go': 'Go',
+            '.php': 'PHP',
+            '.rs': 'Rust',
+            '.swift': 'Swift',
+            '.kt': 'Kotlin',
+            '.m': 'Objective-C',
+        }
+        
+        language_stats = {}
+        total_size = 0
+        
+        for root, dirs, files in os.walk(project_dir):
+            if '.history' in root.split(os.sep):
+                continue
+
+            if '.history' in dirs:
+                dirs.remove('.history')
+
+            for filename in files:
+                file_path = os.path.join(root, filename)
+                ext = os.path.splitext(filename)[1]
+                size = os.path.getsize(file_path)
+                
+                if ext in language_extensions:
+                    lang = language_extensions[ext]
+                    language_stats[lang] = language_stats.get(lang, 0) + size
+                    total_size += size
+        
+        # Calculate percentages
+        for lang in language_stats:
+            language_stats[lang] = round((language_stats[lang] / total_size) * 100, 2) if total_size > 0 else 0.0
+        
+        return {
+            "project_name": project_name,
+            "languages": language_stats
+        }
+       # expected output : {"project_name": "my_project", "languages": {"Python": 50.0, "JavaScript": 30.0, "TypeScript": 20.0}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting language stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get language stats: {str(e)}")
+    
+
+
+    
+
+                
+    
