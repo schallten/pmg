@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Generator, Optional
 import hashlib
 from sqlalchemy import (
+    Boolean,
     create_engine,
     Column,
     Integer,
@@ -20,6 +21,7 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session, Mapped, mapped_column
 
@@ -89,6 +91,28 @@ class FileRecord(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     commit = relationship("Commit", back_populates="files")
+
+
+class RepoDetails(Base):
+    __tablename__ = "repo_details"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(Integer, ForeignKey("projects.id"), nullable=False)
+    stars: Mapped[int] = mapped_column(Integer, default=0)
+    isDeployed: Mapped[bool] = mapped_column(Boolean, default=False)
+    downloadCount: Mapped[int] = mapped_column(Integer, default=0)
+    visits: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Star(Base):
+    __tablename__ = "stars"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (UniqueConstraint('user_id', 'project_id', name='unique_user_project_star'),)
 
 
 # Create engine with psycopg2
@@ -243,18 +267,11 @@ async def push_file(
     last_updated: int = Form(...),
     commit_message: str = Form(...),
     author: str = Form(...),
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> dict[str, str]:
     try:
-        # Read and verify file
-        file_content = await file.read()
-        calculated_hash = hashlib.sha256(file_content).hexdigest()
-        
-        if calculated_hash != hash:
-            raise HTTPException(status_code=400, detail="File hash mismatch - file may be corrupted")
-        
         # Get or create project
         project = db.query(Project).filter(
             Project.user_id == user.id,
@@ -284,22 +301,49 @@ async def push_file(
         project_storage = os.path.join("storage", "files", username, project_name)
         file_path_full = os.path.join(project_storage, path)
         
-        os.makedirs(os.path.dirname(file_path_full), exist_ok=True)
-        
-        # Backup existing file if it exists
-        if os.path.exists(file_path_full):
-            history_dir = os.path.join(project_storage, ".history", commit_id)
-            os.makedirs(history_dir, exist_ok=True)
+        if hash == "DELETED":
+            # Handle deletion
+            if os.path.exists(file_path_full):
+                history_dir = os.path.join(project_storage, ".history", commit_id)
+                os.makedirs(history_dir, exist_ok=True)
+                
+                backup_path = os.path.join(history_dir, path)
+                os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+                
+                # Move old file to history (effectively deleting it from current view)
+                shutil.move(file_path_full, backup_path)
             
-            backup_path = os.path.join(history_dir, path)
-            os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+            file_size = 0
             
-            # Move old file to history
-            shutil.copy2(file_path_full, backup_path)
-        
-        # Save new file
-        with open(file_path_full, "wb") as f:
-            f.write(file_content)
+        else:
+            if not file:
+                raise HTTPException(status_code=400, detail="File content required for non-deleted files")
+
+            # Read and verify file
+            file_content = await file.read()
+            calculated_hash = hashlib.sha256(file_content).hexdigest()
+            
+            if calculated_hash != hash:
+                raise HTTPException(status_code=400, detail="File hash mismatch - file may be corrupted")
+            
+            os.makedirs(os.path.dirname(file_path_full), exist_ok=True)
+            
+            # Backup existing file if it exists
+            if os.path.exists(file_path_full):
+                history_dir = os.path.join(project_storage, ".history", commit_id)
+                os.makedirs(history_dir, exist_ok=True)
+                
+                backup_path = os.path.join(history_dir, path)
+                os.makedirs(os.path.dirname(backup_path), exist_ok=True)
+                
+                # Copy old file to history
+                shutil.copy2(file_path_full, backup_path)
+            
+            # Save new file
+            with open(file_path_full, "wb") as f:
+                f.write(file_content)
+            
+            file_size = len(file_content)
         
         # Create file record
         file_record = FileRecord(
@@ -308,7 +352,7 @@ async def push_file(
             hash=hash,
             last_updated=last_updated,
             storage_path=file_path_full,
-            file_size=len(file_content)
+            file_size=file_size
         )
         db.add(file_record)
         
@@ -318,7 +362,7 @@ async def push_file(
         
         return {
             "success": "true",
-            "message": "File uploaded successfully",
+            "message": "File processed successfully",
             "file_path": path,
             "hash": hash
         }
@@ -376,11 +420,14 @@ def pull_project(
                     arcname = os.path.relpath(file_path, project_dir)
                     zipf.write(file_path, arcname)
 
+        bg_tasks = BackgroundTasks()
+        bg_tasks.add_task(os.remove, zip_filepath)
+
         return FileResponse(
             path=zip_filepath,
             filename = zip_filename,
             media_type='application/zip',
-            background=BackgroundTasks(lambda: os.remove(zip_filepath))
+            background=bg_tasks
         )
     
     except HTTPException:
@@ -389,7 +436,7 @@ def pull_project(
         print(f"Error pulling project: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to pull project: {str(e)}")
 
-@app.post("/api/fetch/{username}/{project_name}")
+@app.api_route("/api/fetch/{username}/{project_name}", methods=["GET", "POST"])
 def fetch_latest_commit(
     username: str,
     project_name: str,
@@ -461,6 +508,7 @@ def search_projects(
 def get_repository(
     username: str,
     project_name: str,
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
     try:
@@ -512,6 +560,23 @@ def get_repository(
                     readme_content = f.read()
                 break
         
+        # Get star count
+        repo_details = db.query(RepoDetails).filter(RepoDetails.project_id == project.id).first()
+        star_count = repo_details.stars if repo_details else 0
+        
+        # Check if current user has starred
+        is_starred = False
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization.replace("Bearer ", "").strip()
+            current_user = db.query(User).filter(User.api_key == token).first()
+            if current_user:
+                star_exists = db.query(Star).filter(
+                    Star.user_id == current_user.id,
+                    Star.project_id == project.id
+                ).first()
+                if star_exists:
+                    is_starred = True
+
         return {
             "username": username,
             "project_name": project_name,
@@ -524,7 +589,9 @@ def get_repository(
                 "date": latest_commit.created_at.isoformat()
             } if latest_commit else None,
             "files": files,
-            "readme": readme_content
+            "readme": readme_content,
+            "stars": star_count,
+            "is_starred": is_starred
         }
     except HTTPException:
         raise
@@ -686,10 +753,94 @@ def get_languages_list(
     except Exception as e:
         print(f"Error getting language stats: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get language stats: {str(e)}")
-    
 
 
+@app.get("/api/profile/{username}")
+def get_profile(
+    username: str,
+    db: Session = Depends(get_db)
+):
+    try:
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        projects = db.query(Project).filter(Project.user_id == user.id).all()
+        
+        project_list = []
+        for project in projects:
+            project_list.append({
+                "project_name": project.project_name,
+                "created_at": project.created_at.isoformat(),
+                "last_updated": project.last_updated.isoformat()
+            })
+        
+        return {
+            "username": user.username,
+            "joined_at": user.created_at.isoformat(),
+            "projects": project_list
+        }
     
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting profile: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get profile: {str(e)}")
 
-                
+@app.post("/api/star_repo/{username}/{project_name}")
+def star_repository(
+    username: str,
+    project_name: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        project_owner = db.query(User).filter(User.username == username).first()
+
+        if not project_owner:
+            raise HTTPException(status_code=404, detail="Project owner not found")
+        
+        project = db.query(Project).filter(
+            Project.user_id == project_owner.id,
+            Project.project_name == project_name
+        ).first()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Check if already starred
+        existing_star = db.query(Star).filter(
+            Star.user_id == user.id,
+            Star.project_id == project.id
+        ).first()
+        
+        if existing_star:
+            raise HTTPException(status_code=400, detail="You have already starred this repository")
+        
+        # Add star
+        new_star = Star(user_id=user.id, project_id=project.id)
+        db.add(new_star)
+        
+        # Update count
+        repo_details = db.query(RepoDetails).filter(RepoDetails.project_id == project.id).first()
+        
+        if not repo_details:
+            repo_details = RepoDetails(project_id=project.id, stars=1)
+            db.add(repo_details)
+        else:
+            repo_details.stars += 1
+        
+        db.commit()
+        
+        return {
+            "message": "Repository starred successfully",
+            "total_stars": repo_details.stars
+        }
     
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error starring repository: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to star repository: {str(e)}")
+            
+

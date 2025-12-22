@@ -161,30 +161,32 @@ func PushCommit(commitID string) {
 		writer.WriteField("author", author)
 
 		// Add file content
-		file, err := os.Open(path)
-		if err != nil {
-			fmt.Printf("  ✗ Failed to open file: %v\n", err)
-			failCount++
-			writer.Close()
-			continue
-		}
+		if hash != "DELETED" {
+			file, err := os.Open(path)
+			if err != nil {
+				fmt.Printf("  ✗ Failed to open file: %v\n", err)
+				failCount++
+				writer.Close()
+				continue
+			}
 
-		part, err := writer.CreateFormFile("file", filepath.Base(path))
-		if err != nil {
-			fmt.Printf("  ✗ Failed to create form: %v\n", err)
+			part, err := writer.CreateFormFile("file", filepath.Base(path))
+			if err != nil {
+				fmt.Printf("  ✗ Failed to create form: %v\n", err)
+				file.Close()
+				failCount++
+				writer.Close()
+				continue
+			}
+
+			_, err = io.Copy(part, file)
 			file.Close()
-			failCount++
-			writer.Close()
-			continue
-		}
-
-		_, err = io.Copy(part, file)
-		file.Close()
-		if err != nil {
-			fmt.Printf("  ✗ Failed to copy file: %v\n", err)
-			failCount++
-			writer.Close()
-			continue
+			if err != nil {
+				fmt.Printf("  ✗ Failed to copy file: %v\n", err)
+				failCount++
+				writer.Close()
+				continue
+			}
 		}
 
 		writer.Close()

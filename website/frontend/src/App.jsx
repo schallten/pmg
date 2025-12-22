@@ -4,6 +4,7 @@ import Header from "./components/header";
 import Hero from "./components/hero";
 import AuthModal from "./components/AuthModal";
 import RepoPage from "./components/RepoPage";
+import ProfilePage from "./components/ProfilePage";
 import "./App.css";
 
 function App() {
@@ -51,6 +52,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Hero />} />
           <Route path="/repo/:username/:project_name" element={<RepoPage />} />
+          <Route path="/profile/:username" element={<ProfilePage />} />
         </Routes>
 
         {showAuthModal && (

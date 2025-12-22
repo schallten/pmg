@@ -177,6 +177,14 @@ func ExecuteAdd() {
 		fmt.Println("error opening ignore.txt file:", err)
 	}
 
+	// Initialize database to check for existing files
+	db, dbErr := initDB()
+	if dbErr != nil {
+		fmt.Println("error initializing database:", dbErr)
+		return
+	}
+	defer db.Close()
+
 	// ensure vcs directory exists for staged file
 	if err := os.MkdirAll(".pmg", os.ModePerm); err != nil {
 		fmt.Println("error creating vcs directory:", err)
@@ -200,7 +208,7 @@ func ExecuteAdd() {
 		}
 
 		if ignoreMap[path] || strings.HasPrefix(path, ".pmg") || strings.Contains(path, "/.pmg") {
-			fmt.Println("ignoring file:", path)
+			// fmt.Println("ignoring file:", path)
 			return nil
 		}
 
@@ -212,6 +220,19 @@ func ExecuteAdd() {
 		hash, hashErr := hashFileContents(path)
 		if hashErr != nil {
 			fmt.Println("error hashing file:", hashErr)
+			return nil
+		}
+
+		// Check if file has changed
+		var lastHash string
+		err := db.QueryRow("SELECT hash FROM files WHERE path = ? ORDER BY id DESC LIMIT 1", path).Scan(&lastHash)
+		if err != nil && err != sql.ErrNoRows {
+			fmt.Println("error querying database:", err)
+			return nil
+		}
+
+		if err == nil && lastHash == hash {
+			// File hasn't changed, skip it
 			return nil
 		}
 
@@ -227,6 +248,42 @@ func ExecuteAdd() {
 
 	if err != nil {
 		fmt.Println("error walking directory:", err)
+	}
+
+	// Check for deleted files
+	rows, err := db.Query("SELECT DISTINCT path FROM files")
+	if err != nil {
+		fmt.Println("error querying database for deleted files:", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			continue
+		}
+
+		// Check if file is ignored
+		if ignoreMap[path] || strings.HasPrefix(path, ".pmg") || strings.Contains(path, "/.pmg") {
+			continue
+		}
+
+		// Check if file exists
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			// File is missing, check if it was already marked as deleted
+			var lastHash string
+			err := db.QueryRow("SELECT hash FROM files WHERE path = ? ORDER BY id DESC LIMIT 1", path).Scan(&lastHash)
+			if err == nil && lastHash == "DELETED" {
+				continue // Already deleted
+			}
+
+			fmt.Printf("deleted file: %s\n", path)
+			_, writeErr := stagedFile.WriteString("DELETED " + path + "\n")
+			if writeErr != nil {
+				fmt.Println("error writing to staged_files.txt file:", writeErr)
+			}
+		}
 	}
 }
 
@@ -302,11 +359,20 @@ func ExecuteCommit() {
 	scanner := bufio.NewScanner(stagedFile)
 	fileCount := 0
 	for scanner.Scan() {
-		path := scanner.Text()
-		hash, hashErr := hashFileContents(path)
-		if hashErr != nil {
-			fmt.Println("error hashing file:", path, hashErr)
-			continue
+		line := scanner.Text()
+		var path, hash string
+		var hashErr error
+
+		if strings.HasPrefix(line, "DELETED ") {
+			path = strings.TrimPrefix(line, "DELETED ")
+			hash = "DELETED"
+		} else {
+			path = line
+			hash, hashErr = hashFileContents(path)
+			if hashErr != nil {
+				fmt.Println("error hashing file:", path, hashErr)
+				continue
+			}
 		}
 
 		_, err := db.Exec(`INSERT INTO files (path, hash, last_updated, commit_message, author, commit_id) VALUES (?, ?, ?, ?, ?, ?)`,

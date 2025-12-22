@@ -40,7 +40,12 @@ function RepoPage() {
             setLoading(true);
 
             // Fetch basic repo data
-            const repoRes = await fetch(`http://localhost:8000/api/repo/${username}/${project_name}`);
+            const token = localStorage.getItem('pmg_api_key');
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+            const repoRes = await fetch(`http://localhost:8000/api/repo/${username}/${project_name}`, {
+                headers: headers
+            });
             if (!repoRes.ok) throw new Error('Repository not found');
             const repoData = await repoRes.json();
             setRepoData(repoData);
@@ -87,6 +92,38 @@ function RepoPage() {
         setCurrentPath('');
     };
 
+    const handleStar = async () => {
+        const token = localStorage.getItem('pmg_api_key');
+        if (!token) {
+            alert("Please login to star repositories");
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:8000/api/star_repo/${username}/${project_name}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setRepoData(prev => ({
+                    ...prev,
+                    stars: data.total_stars,
+                    is_starred: true
+                }));
+            } else {
+                const err = await response.json();
+                alert(err.detail || "Failed to star repository");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error starring repository");
+        }
+    };
+
     if (loading && !repoData && !fileContent) return <div className="loading">Loading...</div>;
     if (error) return <div className="error_page">Error: {error}</div>;
     if (!repoData) return null;
@@ -95,12 +132,27 @@ function RepoPage() {
         <div className="repo_container">
             <div className="repo_header">
                 <div className="repo_title">
-                    <Link to={`/repo/${username}/${project_name}`} onClick={handleBackToFiles} className="repo_link">
-                        <span className="repo_owner">{username}</span>
+                    <div className="repo_link_container">
+                        <Link to={`/profile/${username}`} className="repo_owner_link">
+                            <span className="repo_owner">{username}</span>
+                        </Link>
                         <span className="repo_divider">/</span>
-                        <span className="repo_name">{project_name}</span>
-                    </Link>
+                        <Link to={`/repo/${username}/${project_name}`} onClick={handleBackToFiles} className="repo_name_link">
+                            <span className="repo_name">{project_name}</span>
+                        </Link>
+                    </div>
                     <span className="repo_badge">Public</span>
+                </div>
+
+                <div className="repo_actions">
+                    <button
+                        className={`star_btn ${repoData.is_starred ? 'starred' : ''}`}
+                        onClick={handleStar}
+                        disabled={repoData.is_starred}
+                    >
+                        {repoData.is_starred ? '★ Starred' : '☆ Star'}
+                        <span className="star_count">{repoData.stars}</span>
+                    </button>
                 </div>
 
                 {/* Language Bar */}
