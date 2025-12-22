@@ -29,9 +29,13 @@ function RepoPage() {
     const [error, setError] = useState(null);
     const [currentPath, setCurrentPath] = useState('');
     const [fileContent, setFileContent] = useState(null);
-    const [activeTab, setActiveTab] = useState('code'); // 'code' or 'commits'
+    const [activeTab, setActiveTab] = useState('code'); // 'code', 'commits', or 'settings'
+    const [currentUser, setCurrentUser] = useState(null);
+    const [deploySource, setDeploySource] = useState('index.html');
 
     useEffect(() => {
+        const user = localStorage.getItem('pmg_username');
+        setCurrentUser(user);
         fetchRepoData();
     }, [username, project_name]);
 
@@ -49,6 +53,9 @@ function RepoPage() {
             if (!repoRes.ok) throw new Error('Repository not found');
             const repoData = await repoRes.json();
             setRepoData(repoData);
+            if (repoData.deploy_source_path) {
+                setDeploySource(repoData.deploy_source_path);
+            }
 
             // Fetch languages
             const langRes = await fetch(`http://localhost:8000/api/repo/${username}/${project_name}/languages`);
@@ -112,21 +119,81 @@ function RepoPage() {
                 setRepoData(prev => ({
                     ...prev,
                     stars: data.total_stars,
-                    is_starred: true
+                    is_starred: data.is_starred
                 }));
             } else {
                 const err = await response.json();
-                alert(err.detail || "Failed to star repository");
+                alert(err.detail || "Failed to update star status");
             }
         } catch (err) {
             console.error(err);
-            alert("Error starring repository");
+            alert("Error updating star status");
+        }
+    };
+
+    const handleDeploy = async (e) => {
+        e.preventDefault();
+        const token = localStorage.getItem('pmg_api_key');
+        if (!token) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('source_path', deploySource);
+
+            const response = await fetch(`http://localhost:8000/api/deploy/${username}/${project_name}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert(data.message);
+                fetchRepoData(); // Refresh data
+            } else {
+                const err = await response.json();
+                alert(err.detail || "Failed to deploy");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error deploying project");
+        }
+    };
+
+    const handleUndeploy = async () => {
+        if (!confirm("Are you sure you want to disable deployment?")) return;
+
+        const token = localStorage.getItem('pmg_api_key');
+        if (!token) return;
+
+        try {
+            const response = await fetch(`http://localhost:8000/api/undeploy/${username}/${project_name}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                alert("Deployment disabled");
+                fetchRepoData(); // Refresh data
+            } else {
+                const err = await response.json();
+                alert(err.detail || "Failed to undeploy");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error undeploying project");
         }
     };
 
     if (loading && !repoData && !fileContent) return <div className="loading">Loading...</div>;
     if (error) return <div className="error_page">Error: {error}</div>;
     if (!repoData) return null;
+
+    const isOwner = currentUser === username;
 
     return (
         <div className="repo_container">
@@ -142,13 +209,25 @@ function RepoPage() {
                         </Link>
                     </div>
                     <span className="repo_badge">Public</span>
+                    {repoData.isDeployed && (
+                        <span className="deployment_badge">Deployed</span>
+                    )}
                 </div>
 
                 <div className="repo_actions">
+                    {repoData.isDeployed && (
+                        <a
+                            href={`http://localhost:8000${repoData.deployment_url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="visit_site_btn"
+                        >
+                            Visit Site ↗
+                        </a>
+                    )}
                     <button
                         className={`star_btn ${repoData.is_starred ? 'starred' : ''}`}
                         onClick={handleStar}
-                        disabled={repoData.is_starred}
                     >
                         {repoData.is_starred ? '★ Starred' : '☆ Star'}
                         <span className="star_count">{repoData.stars}</span>
@@ -199,6 +278,14 @@ function RepoPage() {
                 >
                     Commits
                 </button>
+                {isOwner && (
+                    <button
+                        className={`tab_btn ${activeTab === 'settings' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('settings')}
+                    >
+                        Settings
+                    </button>
+                )}
             </div>
 
             {activeTab === 'code' && (
@@ -267,6 +354,53 @@ function RepoPage() {
                         </div>
                     ))}
                     {commits.length === 0 && <p className="no_commits">No commits found.</p>}
+                </div>
+            )}
+
+            {activeTab === 'settings' && isOwner && (
+                <div className="settings_container">
+                    <h3>Pages</h3>
+                    <p className="settings_desc">
+                        Host your project as a static website.
+                    </p>
+
+                    <div className="settings_card">
+                        <form onSubmit={handleDeploy}>
+                            <div className="form_group">
+                                <label>Source File</label>
+                                <input
+                                    type="text"
+                                    value={deploySource}
+                                    onChange={(e) => setDeploySource(e.target.value)}
+                                    placeholder="e.g., index.html"
+                                    className="settings_input"
+                                />
+                                <p className="help_text">The file to serve as the entry point (relative to root).</p>
+                            </div>
+
+                            <button type="submit" className="btn_primary">
+                                {repoData.isDeployed ? 'Update Deployment' : 'Deploy Site'}
+                            </button>
+                        </form>
+
+                        {repoData.isDeployed && (
+                            <div className="deployment_status">
+                                <p>✅ Your site is live at:</p>
+                                <a
+                                    href={`http://localhost:8000${repoData.deployment_url}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="deployment_link"
+                                >
+                                    http://localhost:8000{repoData.deployment_url}
+                                </a>
+
+                                <button onClick={handleUndeploy} className="btn_danger">
+                                    Disable Deployment
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

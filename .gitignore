@@ -14,6 +14,7 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 __pycache__/
 pids
 *.pid
+website/backed/migrate_deploy.py
 *.seed
 *.pid.lock
 web-ide/recent_workspaces.json
