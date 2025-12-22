@@ -1,11 +1,13 @@
 import React from 'react';
-
+import { Link } from 'react-router-dom';
 import SearchBar from './SearchBar';
 
 function Header({ user, onLoginClick, onSignupClick, onLogoutClick }) {
   return (
     <header className="header_header">
-      <p className="header_name">PMG - Poor Man's Git</p>
+      <Link to="/" className="header_logo_link">
+        <img src="/logo.png" alt="PMG Logo" className="header_logo" />
+      </Link>
 
       <SearchBar />
 

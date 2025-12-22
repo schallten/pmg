@@ -162,6 +162,65 @@ function RepoPage() {
         }
     };
 
+    const handleFork = async () => {
+        const token = localStorage.getItem('pmg_api_key');
+        if (!token) {
+            alert("Please login to fork repositories");
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:8000/api/fork/${username}/${project_name}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Repository forked successfully to ${data.new_repo_url}`);
+            } else {
+                const err = await response.json();
+                alert(err.detail || "Failed to fork repository");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error forking repository");
+        }
+    }
+
+    const deleteRepo = async () => {
+        if (!confirm("Are you sure you want to delete this repository? This action cannot be undone.")) return;
+
+        const token = localStorage.getItem('pmg_api_key');
+        if (!token) {
+            alert("Please login to delete repositories");
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:8000/api/delete_repo/${username}/${project_name}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                alert("Repository deleted");
+                // Redirect to the user's profile page after deletion
+                window.location.href = `/profile/${username}`;
+            } else {
+                const err = await response.json();
+                alert(err.detail || "Failed to delete repository");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error deleting repository");
+        }
+    };
+
     const handleUndeploy = async () => {
         if (!confirm("Are you sure you want to disable deployment?")) return;
 
@@ -232,6 +291,7 @@ function RepoPage() {
                         {repoData.is_starred ? '★ Starred' : '☆ Star'}
                         <span className="star_count">{repoData.stars}</span>
                     </button>
+                    <button className={`fork_btn`} onClick={handleFork}><span className='fork_btn_span'>fork repo</span></button>
                 </div>
 
                 {/* Language Bar */}
@@ -400,6 +460,15 @@ function RepoPage() {
                                 </button>
                             </div>
                         )}
+                    </div>
+                    <div className='delete-repo'>
+                        <h3>Delete Repository</h3>
+                        <p className="delete_settings_desc">
+                            Permanently delete this repository. This action cannot be undone.
+                        </p>
+                        <button className="btn_danger" onClick={deleteRepo}>
+                            Delete Repository
+                        </button>
                     </div>
                 </div>
             )}

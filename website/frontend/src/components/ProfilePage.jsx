@@ -34,9 +34,11 @@ function ProfilePage() {
     return (
         <div className="profile_container">
             <div className="profile_sidebar">
-                <div className="profile_avatar_placeholder">
-                    {profileData.username.charAt(0).toUpperCase()}
-                </div>
+                <img
+                    src={profileData.gravatar_url}
+                    alt={`${profileData.username}'s avatar`}
+                    className="profile_avatar"
+                />
                 <h1 className="profile_name">{profileData.username}</h1>
                 <p className="profile_joined">Joined {new Date(profileData.joined_at).toLocaleDateString()}</p>
             </div>

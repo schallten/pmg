@@ -632,3 +632,104 @@ def undeploy_project(
         print(f"Error undeploying project: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to undeploy project: {str(e)}")
 
+@router.post("/fork/{username}/{project_name}")
+def fork_repository(
+    username: str,
+    project_name: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        project_owner = db.query(User).filter(User.username == username).first()
+
+        if not project_owner:
+            raise HTTPException(status_code=404, detail="Project owner not found")
+        
+        original_project = db.query(Project).filter(
+            Project.user_id == project_owner.id,
+            Project.project_name == project_name
+        ).first()
+
+        if not original_project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Create new project for the forking user
+        forked_project_name = f"{project_name}-fork"
+        existing_fork = db.query(Project).filter(
+            Project.user_id == user.id,
+            Project.project_name == forked_project_name
+        ).first()
+        
+        if existing_fork:
+            raise HTTPException(status_code=400, detail="You have already forked this repository")
+        
+        forked_project = Project(
+            user_id=user.id,
+            project_name=forked_project_name
+        )
+        db.add(forked_project)
+        db.flush()
+        
+        # Copy files in storage
+        original_dir = os.path.join("storage", "files", username, project_name)
+        forked_dir = os.path.join("storage", "files", user.username, forked_project_name)
+        shutil.copytree(original_dir, forked_dir)
+        
+        db.commit()
+        
+        return {
+            "message": "Repository forked successfully",
+            "forked_project_name": forked_project_name
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error forking repository: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fork repository: {str(e)}")
+    
+@router.delete("/delete_repo/{username}/{project_name}")
+def delete_repository(
+    username: str,
+    project_name: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        # Verify ownership
+        if user.username != username:
+            raise HTTPException(status_code=403, detail="Only the project owner can delete the repository")
+            
+        project = db.query(Project).filter(
+            Project.user_id == user.id,
+            Project.project_name == project_name
+        ).first()
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Delete project files
+        project_dir = os.path.join("storage", "files", username, project_name)
+        if os.path.exists(project_dir):
+            shutil.rmtree(project_dir)
+        
+        # Delete database records
+        db.query(Star).filter(Star.project_id == project.id).delete()
+        db.query(RepoDetails).filter(RepoDetails.project_id == project.id).delete()
+        db.query(FileRecord).filter(FileRecord.commit_id.in_(
+            db.query(Commit.commit_id).filter(Commit.project_id == project.id)
+        )).delete(synchronize_session=False)
+        db.query(Commit).filter(Commit.project_id == project.id).delete()
+        db.delete(project)
+        
+        db.commit()
+        
+        return {
+            "message": "Repository deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting repository: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete repository: {str(e)}")

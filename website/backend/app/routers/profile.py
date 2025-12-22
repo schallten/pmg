@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+import hashlib
 from ..database import get_db
 from ..models import User, Project
 
@@ -54,8 +55,14 @@ def get_profile(
                 "last_updated": project.last_updated.isoformat()
             })
         
+        # Generate Gravatar URL
+        email_hash = hashlib.md5(user.email.lower().strip().encode('utf-8')).hexdigest()
+        gravatar_url = f"https://www.gravatar.com/avatar/{email_hash}?d=identicon&s=200"
+        
         return {
             "username": user.username,
+            "email": user.email,
+            "gravatar_url": gravatar_url,
             "joined_at": user.created_at.isoformat(),
             "projects": project_list
         }
