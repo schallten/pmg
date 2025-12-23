@@ -693,7 +693,48 @@ body {
   color: #58a6ff;
 }
 
-/* File List */
+/* File Navigation */
+.file_navigation {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: #8b949e;
+}
+
+.breadcrumb_item {
+  color: #58a6ff;
+  cursor: pointer;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.breadcrumb_item:hover {
+  color: #79c0ff;
+  text-decoration: underline;
+}
+
+.breadcrumb_item.active {
+  color: #e6edf3;
+  cursor: default;
+  text-decoration: none;
+}
+
+.breadcrumb_separator {
+  color: #8b949e;
+  font-weight: 300;
+}
+
 .file_list_container {
   border: 1px solid #30363d;
   border-radius: 6px;

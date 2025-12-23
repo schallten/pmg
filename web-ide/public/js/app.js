@@ -32,26 +32,152 @@ const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const closeSettingsBtn = document.getElementById('close-settings');
 const pluginListEl = document.getElementById('plugin-list');
+const vcsHistoryBtn = document.getElementById('vcs-history-btn');
+const vcsModal = document.getElementById('vcs-modal');
+const closeVcsBtn = document.getElementById('close-vcs');
+const vcsHistoryList = document.getElementById('vcs-history-list');
 
 // --- 2. State Variables ---
 let currentFilePath = null;
 let plugins = [];
+let customPlugins = [];
 let isWordWrapEnabled = false;
 
 // --- 3. Plugin System ---
 
+const CUSTOM_PLUGINS_KEY = 'pmg-ide-custom-plugins';
+
 function loadPlugins() {
+    // Load built-in plugins
     plugins = [
         SyntaxHighlighter,
         AIChat
     ];
 
+    // Load custom plugins from localStorage
+    loadCustomPluginsFromStorage();
+
+    updatePluginCount();
+}
+
+function updatePluginCount() {
     if (pluginCountEl) {
-        pluginCountEl.textContent = plugins.length;
+        pluginCountEl.textContent = plugins.length + customPlugins.length;
     }
 }
 
+async function loadCustomPluginsFromStorage() {
+    const stored = localStorage.getItem(CUSTOM_PLUGINS_KEY);
+    if (!stored) return;
+
+    try {
+        const urls = JSON.parse(stored);
+        for (const url of urls) {
+            await loadPluginFromURL(url, false); // false = don't save again
+        }
+    } catch (err) {
+        console.error('Failed to load custom plugins from storage:', err);
+    }
+}
+
+async function loadPluginFromURL(url, saveToStorage = true) {
+    // Validate URL
+    if (!url || typeof url !== 'string') {
+        throw new Error('Invalid URL');
+    }
+
+    if (!url.endsWith('.js')) {
+        throw new Error('URL must end with .js');
+    }
+
+    try {
+        // Dynamically import the module
+        const module = await import(url);
+
+        // Validate plugin interface
+        if (!module.getName || typeof module.getName !== 'function') {
+            throw new Error('Plugin must export a getName() function');
+        }
+
+        if (!module.getDescription || typeof module.getDescription !== 'function') {
+            throw new Error('Plugin must export a getDescription() function');
+        }
+
+        // Check if plugin already loaded
+        const name = module.getName();
+        const alreadyLoaded = customPlugins.some(p => p.getName() === name);
+        if (alreadyLoaded) {
+            throw new Error('Plugin already loaded');
+        }
+
+        // Add to custom plugins
+        const pluginObj = {
+            ...module,
+            url: url,
+            isCustom: true
+        };
+        customPlugins.push(pluginObj);
+
+        // Call initialize if it exists
+        if (module.initialize && typeof module.initialize === 'function') {
+            try {
+                module.initialize();
+            } catch (e) {
+                console.error(`Error initializing plugin ${name}:`, e);
+            }
+        }
+
+        // Save to localStorage if requested
+        if (saveToStorage) {
+            saveCustomPluginURL(url);
+        }
+
+        updatePluginCount();
+        return { success: true, name: name };
+    } catch (err) {
+        throw new Error(`Failed to load plugin: ${err.message}`);
+    }
+}
+
+function saveCustomPluginURL(url) {
+    const stored = localStorage.getItem(CUSTOM_PLUGINS_KEY);
+    let urls = [];
+
+    if (stored) {
+        try {
+            urls = JSON.parse(stored);
+        } catch (err) {
+            urls = [];
+        }
+    }
+
+    if (!urls.includes(url)) {
+        urls.push(url);
+        localStorage.setItem(CUSTOM_PLUGINS_KEY, JSON.stringify(urls));
+    }
+}
+
+function removeCustomPlugin(url) {
+    // Remove from customPlugins array
+    customPlugins = customPlugins.filter(p => p.url !== url);
+
+    // Remove from localStorage
+    const stored = localStorage.getItem(CUSTOM_PLUGINS_KEY);
+    if (stored) {
+        try {
+            let urls = JSON.parse(stored);
+            urls = urls.filter(u => u !== url);
+            localStorage.setItem(CUSTOM_PLUGINS_KEY, JSON.stringify(urls));
+        } catch (err) {
+            console.error('Failed to update storage:', err);
+        }
+    }
+
+    updatePluginCount();
+}
+
 function renderSettings() {
+    // Render built-in plugins
     pluginListEl.innerHTML = '';
 
     plugins.forEach((plugin, index) => {
@@ -86,6 +212,61 @@ function renderSettings() {
 
         pluginListEl.appendChild(item);
     });
+
+    // Render custom plugins
+    const customPluginListEl = document.getElementById('custom-plugin-list');
+    customPluginListEl.innerHTML = '';
+
+    if (customPlugins.length === 0) {
+        customPluginListEl.innerHTML = '<p style="color: #888; font-size: 0.9em;">No custom plugins loaded</p>';
+    } else {
+        customPlugins.forEach((plugin) => {
+            const item = document.createElement('div');
+            item.className = 'plugin-item';
+
+            const name = plugin.getName();
+            const desc = plugin.getDescription();
+            const enabled = plugin.isEnabled ? plugin.isEnabled.value : false;
+
+            item.innerHTML = `
+                <div class="plugin-info">
+                    <h4>${name}</h4>
+                    <p>${desc}</p>
+                    <small style="color: #666; display: block; margin-top: 5px;">${plugin.url}</small>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    ${plugin.isEnabled ? `
+                        <label class="switch">
+                            <input type="checkbox" ${enabled ? 'checked' : ''} class="custom-plugin-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    ` : ''}
+                    <button class="remove-plugin-btn" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Remove</button>
+                </div>
+            `;
+
+            if (plugin.isEnabled) {
+                const checkbox = item.querySelector('.custom-plugin-toggle');
+                checkbox.addEventListener('change', (e) => {
+                    const isChecked = e.target.checked;
+                    plugin.isEnabled.value = isChecked;
+                    if (currentFilePath) {
+                        updateHighlighting();
+                    }
+                });
+            }
+
+            const removeBtn = item.querySelector('.remove-plugin-btn');
+            removeBtn.addEventListener('click', () => {
+                if (confirm(`Remove plugin "${name}"?`)) {
+                    removeCustomPlugin(plugin.url);
+                    renderSettings();
+                }
+            });
+
+            customPluginListEl.appendChild(item);
+        });
+    }
 }
 
 // --- 4. Event Listeners ---
@@ -105,6 +286,119 @@ if (settingsBtn) {
         settingsModal.style.display = 'block';
     });
 }
+
+// Load Plugin Button
+const loadPluginBtn = document.getElementById('load-plugin-btn');
+const pluginUrlInput = document.getElementById('plugin-url-input');
+const pluginLoadStatus = document.getElementById('plugin-load-status');
+
+if (loadPluginBtn && pluginUrlInput && pluginLoadStatus) {
+    loadPluginBtn.addEventListener('click', async () => {
+        const url = pluginUrlInput.value.trim();
+
+        if (!url) {
+            pluginLoadStatus.textContent = 'Please enter a URL';
+            pluginLoadStatus.style.color = '#e74c3c';
+            return;
+        }
+
+        pluginLoadStatus.textContent = 'Loading plugin...';
+        pluginLoadStatus.style.color = '#3498db';
+        loadPluginBtn.disabled = true;
+
+        try {
+            const result = await loadPluginFromURL(url, true);
+            pluginLoadStatus.textContent = `✓ Successfully loaded: ${result.name}`;
+            pluginLoadStatus.style.color = '#2ecc71';
+            pluginUrlInput.value = '';
+
+            // Refresh the settings view
+            renderSettings();
+        } catch (err) {
+            pluginLoadStatus.textContent = `✗ ${err.message}`;
+            pluginLoadStatus.style.color = '#e74c3c';
+        } finally {
+            loadPluginBtn.disabled = false;
+        }
+    });
+
+    // Allow Enter key to load plugin
+    pluginUrlInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            loadPluginBtn.click();
+        }
+    });
+}
+
+// VCS History
+if (vcsHistoryBtn) {
+    vcsHistoryBtn.addEventListener('click', () => {
+        loadVcsHistory();
+        vcsModal.style.display = 'block';
+    });
+}
+
+if (closeVcsBtn) {
+    closeVcsBtn.addEventListener('click', () => {
+        vcsModal.style.display = 'none';
+    });
+}
+
+window.addEventListener('click', (e) => {
+    if (e.target === vcsModal) {
+        vcsModal.style.display = 'none';
+    }
+});
+
+async function checkVcsStatus() {
+    try {
+        const response = await fetch('/vcs/status');
+        const data = await response.json();
+        if (data.is_vcs) {
+            vcsHistoryBtn.style.display = 'inline-block';
+        } else {
+            vcsHistoryBtn.style.display = 'none';
+        }
+    } catch (err) {
+        console.error('Failed to check VCS status', err);
+    }
+}
+
+async function loadVcsHistory() {
+    vcsHistoryList.innerHTML = '<p>Loading history...</p>';
+    try {
+        const response = await fetch('/vcs/history');
+        const data = await response.json();
+
+        if (data.history && data.history.length > 0) {
+            vcsHistoryList.innerHTML = '';
+            data.history.forEach(commit => {
+                const item = document.createElement('div');
+                item.className = 'vcs-history-item';
+
+                const date = new Date(commit.timestamp * 1000).toLocaleString();
+
+                item.innerHTML = `
+                    <div class="commit-header">
+                        <span class="commit-id">ID: ${commit.commit_id.substring(0, 8)}...</span>
+                        <span class="commit-date">${date}</span>
+                    </div>
+                    <div class="commit-message">${commit.message}</div>
+                    <div class="commit-author">Author: ${commit.author}</div>
+                    <div class="commit-stats">${commit.files_changed} file(s) changed</div>
+                `;
+                vcsHistoryList.appendChild(item);
+            });
+        } else if (data.error) {
+            vcsHistoryList.innerHTML = `<p class="error">${data.error}</p>`;
+        } else {
+            vcsHistoryList.innerHTML = '<p>No commit history found.</p>';
+        }
+    } catch (err) {
+        vcsHistoryList.innerHTML = '<p class="error">Failed to load history</p>';
+    }
+}
+
 
 function loadRecentWorkspaces() {
     const container = document.getElementById('recent-workspaces-container');
@@ -276,6 +570,7 @@ async function openWorkspace() {
 
             projectName.textContent = path.split('/').pop();
 
+            checkVcsStatus();
             loadFileTree();
         } else {
             errorMsg.textContent = data.error;

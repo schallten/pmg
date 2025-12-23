@@ -50,6 +50,7 @@
                     <button id="ai-chat-btn">🤖 AI Chat</button>
                     <button id="save-btn">Save (Ctrl+S)</button>
                     <button id="terminal-btn">Open Terminal</button>
+                    <button id="vcs-history-btn" style="display: none;">📜 History</button>
                     <button id="settings-btn">⚙️ Settings</button>
                 </div>
             </div>
@@ -83,6 +84,21 @@
                 <h3>Plugins</h3>
                 <div id="plugin-list" class="plugin-list">
                     <!-- Plugins will be injected here -->
+                </div>
+
+                <h3 style="margin-top: 30px;">Load Custom Plugin</h3>
+                <p style="font-size: 0.9em; color: #888; margin-bottom: 10px;">
+                    Enter a URL to a JavaScript module (must end with .js)
+                </p>
+                <div class="input-group" style="margin-bottom: 10px;">
+                    <input type="text" id="plugin-url-input" placeholder="https://example.com/my-plugin.js">
+                    <button id="load-plugin-btn">Load Plugin</button>
+                </div>
+                <p id="plugin-load-status" style="font-size: 0.85em; margin-top: 5px;"></p>
+
+                <h3 style="margin-top: 20px;">Custom Plugins</h3>
+                <div id="custom-plugin-list" class="plugin-list">
+                    <!-- Custom plugins will be listed here -->
                 </div>
             </div>
         </div>
@@ -130,6 +146,21 @@
                         <textarea id="chat-input" placeholder="Ask a question about your code..." rows="3"></textarea>
                         <button id="send-chat">Send</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VCS History Modal -->
+    <div id="vcs-modal" class="modal">
+        <div class="modal-content vcs-modal-content">
+            <div class="modal-header">
+                <h2>Commit History</h2>
+                <span class="close-btn" id="close-vcs">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="vcs-history-list" class="vcs-history-list">
+                    <!-- History will be injected here -->
                 </div>
             </div>
         </div>

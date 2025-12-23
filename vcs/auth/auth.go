@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"vcs/checker"
+	vcsdb "vcs/database"
+	"vcs/utils"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -54,9 +56,9 @@ func AuthenticateUser() {
 
 func PushCommit(commitID string) {
 	fmt.Println("Pushing commit", commitID, "to server...")
-	db, err := sql.Open("sqlite3", ".pmg/vcs.db")
+	db, err := vcsdb.InitDB()
 	if err != nil {
-		fmt.Println("error opening database:", err)
+		fmt.Println("error initializing database:", err)
 		return
 	}
 	defer db.Close()
@@ -113,7 +115,7 @@ func PushCommit(commitID string) {
 	if err != nil {
 		// First time push - ask for username
 		fmt.Print("Enter your username: ")
-		fmt.Scanln(&username)
+		username = utils.ReadInput()
 		
 		if username == "" {
 			fmt.Println("Username is required")
@@ -240,15 +242,20 @@ func PushCommit(commitID string) {
 }
 
 func Pull() {
+	if err := os.MkdirAll(".pmg", 0755); err != nil {
+		fmt.Println("error creating .pmg directory:", err)
+		return
+	}
+
 	username, projectName, err := GetRepositoryConfig()
 	
 	if err != nil {
 		// Config doesn't exist, ask user
 		fmt.Println("Please enter username and project name of the repository")
 		fmt.Print("Username: ")
-		fmt.Scanln(&username)
+		username = utils.ReadInput()
 		fmt.Print("Project Name: ")
-		fmt.Scanln(&projectName)
+		projectName = utils.ReadInput()
 		
 		if username == "" || projectName == "" {
 			fmt.Println("username and project name is needed")
@@ -262,11 +269,44 @@ func Pull() {
 	}
 
 	data, err := os.ReadFile(".pmg/configured.txt")
+	var token string
 	if err != nil {
-		fmt.Println("error reading configuration:", err)
-		return
+		if os.IsNotExist(err) {
+			fmt.Println("API key not found. Please enter your API key from the PMG website:")
+			token = utils.ReadInput()
+			if token == "" {
+				fmt.Println("API key is required to pull from the server")
+				return
+			}
+			err = os.WriteFile(".pmg/configured.txt", []byte(token), 0644)
+			if err != nil {
+				fmt.Println("error saving API key:", err)
+				return
+			}
+		} else {
+			fmt.Println("error reading configuration:", err)
+			return
+		}
+	} else {
+		token = strings.TrimSpace(string(data))
 	}
-	token := strings.TrimSpace(string(data))
+
+	// Also ensure author is set
+	if _, err := os.Stat(".pmg/author.txt"); os.IsNotExist(err) {
+		fmt.Println("Please enter your username for commits:")
+		author := utils.ReadInput()
+		if author != "" {
+			os.WriteFile(".pmg/author.txt", []byte(author), 0644)
+		}
+	}
+
+	// Initialize database if it doesn't exist
+	vdb, err := vcsdb.InitDB()
+	if err != nil {
+		fmt.Println("Warning: Could not initialize local database:", err)
+	} else {
+		vdb.Close()
+	}
 
 	url := fmt.Sprintf("%sapi/pull/%s/%s", server_url, username, projectName)
 	req, err := http.NewRequest("POST", url, nil)
@@ -332,9 +372,9 @@ func Fetch(){
 	if err!=nil{
 		fmt.Println("please enter username and project name of the repository")
 		fmt.Println("username : ")
-		fmt.Scanln(&username)
+		username = utils.ReadInput()
 		fmt.Println("project name : ")
-		fmt.Scanln(&projectName)
+		projectName = utils.ReadInput()
 		if username=="" || projectName==""{
 			fmt.Println("username and project name is needed")
 			return
@@ -395,9 +435,9 @@ func Fetch(){
 	fmt.Printf("Latest commit on server: %s at %d\n",serverCommitID,serverUnixTime)
 
 	// get local latest commit
-	db,err := sql.Open("sqlite3",".pmg/vcs.db")
-	if err!=nil{
-		fmt.Println("error opening database:",err)
+	db, err := vcsdb.InitDB()
+	if err != nil {
+		fmt.Println("error initializing database:", err)
 		return
 	}
 	defer db.Close()
@@ -414,9 +454,7 @@ func Fetch(){
 
 	if err == sql.ErrNoRows {
 		fmt.Println("\nno local commits found, but server has commits")
-		fmt.Println("would you like to pull? (y/n) :")
-		var answer string
-		fmt.Scanln(&answer)
+		answer := utils.ReadInput()
 
 		if strings.ToLower(answer) == "y" {
 			Pull()
@@ -438,8 +476,7 @@ func Fetch(){
 		// Local is ahead
 		fmt.Println("\n✓ Your local repository is ahead of the server")
 		fmt.Print("Would you like to push your changes? (y/n): ")
-		var answer string
-		fmt.Scanln(&answer)
+		answer := utils.ReadInput()
 		
 		if strings.ToLower(answer) == "y" || strings.ToLower(answer) == "yes" {
 			PushCommit("")
@@ -448,8 +485,7 @@ func Fetch(){
 		// Server is ahead
 		fmt.Println("\n✓ Server has newer commits")
 		fmt.Print("Would you like to pull? (y/n): ")
-		var answer string
-		fmt.Scanln(&answer)
+		answer := utils.ReadInput()
 		
 		if strings.ToLower(answer) == "y" || strings.ToLower(answer) == "yes" {
 			Pull()
@@ -531,7 +567,7 @@ func extractZip(zipPath, destDir string) error {
 // GetProjectName returns the project name either from a small project file or by using the current directory name.
 func GetProjectName() (string, error) {
 	// First try to read a dedicated project name file
-	if data, err := os.ReadFile(".pmg/project.txt"); err == nil {
+	if data, err := os.ReadFile(".pmg/project_name.txt"); err == nil {
 		name := strings.TrimSpace(string(data))
 		if name != "" {
 			return name, nil

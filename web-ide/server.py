@@ -362,6 +362,57 @@ def delete_item():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/vcs/status', methods=['GET'])
+def vcs_status():
+    if not current_workspace:
+        return jsonify({'error': 'No workspace open'}), 400
+    
+    vcs_path = os.path.join(current_workspace, '.pmg')
+    is_vcs = os.path.isdir(vcs_path)
+    return jsonify({'is_vcs': is_vcs})
+
+@app.route('/vcs/history', methods=['GET'])
+def vcs_history():
+    if not current_workspace:
+        return jsonify({'error': 'No workspace open'}), 400
+    
+    db_path = os.path.join(current_workspace, '.pmg', 'vcs.db')
+    if not os.path.exists(db_path):
+        return jsonify({'error': 'VCS database not found'}), 404
+    
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT commit_id, commit_message, author, last_updated, COUNT(path) as files_changed
+            FROM files 
+            GROUP BY commit_id 
+            ORDER BY id DESC
+        ''')
+        
+        history = []
+        for row in cursor.fetchall():
+            # Ensure all fields are JSON serializable (decode bytes if necessary)
+            commit_id = row[0].decode('utf-8', errors='replace') if isinstance(row[0], bytes) else row[0]
+            message = row[1].decode('utf-8', errors='replace') if isinstance(row[1], bytes) else row[1]
+            author = row[2].decode('utf-8', errors='replace') if isinstance(row[2], bytes) else row[2]
+            
+            history.append({
+                'commit_id': commit_id,
+                'message': message,
+                'author': author,
+                'timestamp': row[3],
+                'files_changed': row[4]
+            })
+            
+        conn.close()
+        return jsonify({'history': history})
+    except Exception as e:
+        logger.error(f"Error reading VCS history: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/resources', methods=['GET'])
 def get_resources():
     try:

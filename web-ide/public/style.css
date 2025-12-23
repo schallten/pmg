@@ -707,3 +707,120 @@ input:checked+.slider:before {
 .chat-input-section button:hover {
     opacity: 0.9;
 }
+
+/* Custom Plugin Loading Styles */
+#plugin-url-input {
+    flex: 1;
+    padding: 8px;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+#load-plugin-btn {
+    padding: 8px 15px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: opacity 0.2s;
+}
+
+#load-plugin-btn:hover:not(:disabled) {
+    opacity: 0.9;
+}
+
+#load-plugin-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#plugin-load-status {
+    min-height: 1.2em;
+    font-weight: 500;
+}
+
+.remove-plugin-btn {
+    transition: transform 0.2s, opacity 0.2s;
+}
+
+.remove-plugin-btn:hover {
+    opacity: 0.9 !important;
+    transform: scale(1.05);
+}
+
+.plugin-list h3 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+}
+
+.plugin-item small {
+    word-break: break-all;
+}
+
+/* VCS History Styles */
+.vcs-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.vcs-history-item {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 15px;
+    transition: border-color 0.2s;
+}
+
+.vcs-history-item:hover {
+    border-color: var(--accent);
+}
+
+.commit-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+}
+
+.commit-id {
+    color: var(--accent);
+    font-family: 'Consolas', monospace;
+}
+
+.commit-date {
+    color: var(--text-secondary);
+}
+
+.commit-message {
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.commit-author {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.commit-stats {
+    font-size: 0.85rem;
+    color: #6a9955;
+    /* Greenish color for stats */
+}
+
+.vcs-modal-content {
+    width: 600px;
+    max-width: 90%;
+}

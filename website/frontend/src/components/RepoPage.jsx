@@ -32,6 +32,7 @@ function RepoPage() {
     const [activeTab, setActiveTab] = useState('code'); // 'code', 'commits', or 'settings'
     const [currentUser, setCurrentUser] = useState(null);
     const [deploySource, setDeploySource] = useState('index.html');
+    const [currentDir, setCurrentDir] = useState('');
 
     useEffect(() => {
         const user = localStorage.getItem('pmg_username');
@@ -97,6 +98,50 @@ function RepoPage() {
     const handleBackToFiles = () => {
         setFileContent(null);
         setCurrentPath('');
+    };
+
+    const handleDirClick = (path) => {
+        setCurrentDir(path);
+    };
+
+    const handleBreadcrumbClick = (path) => {
+        setCurrentDir(path);
+        setFileContent(null);
+        setCurrentPath('');
+    };
+
+    const getItemsInDir = () => {
+        if (!repoData || !repoData.files) return [];
+
+        const items = new Map();
+
+        repoData.files.forEach(file => {
+            // Check if file is inside currentDir
+            if (currentDir && !file.path.startsWith(currentDir + '/')) return;
+            if (!currentDir && file.path.includes('/')) {
+                // We are at root, but file is in a subdirectory
+            }
+
+            const relativePath = currentDir ? file.path.substring(currentDir.length + 1) : file.path;
+            const parts = relativePath.split('/');
+            const name = parts[0];
+            const fullPath = currentDir ? `${currentDir}/${name}` : name;
+
+            if (parts.length > 1) {
+                // It's a directory
+                if (!items.has(name)) {
+                    items.set(name, { name, path: fullPath, type: 'dir', size: 0 });
+                }
+            } else {
+                // It's a file
+                items.set(name, { name, path: fullPath, type: 'file', size: file.size });
+            }
+        });
+
+        return Array.from(items.values()).sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
     };
 
     const handleStar = async () => {
@@ -349,7 +394,36 @@ function RepoPage() {
             </div>
 
             {activeTab === 'code' && (
-                <>
+                <div className="repo_code_view">
+                    <div className="file_navigation">
+                        <div className="breadcrumbs">
+                            <span
+                                className="breadcrumb_item"
+                                onClick={() => handleBreadcrumbClick('')}
+                            >
+                                {project_name}
+                            </span>
+                            {(fileContent ? fileContent.path : currentDir).split('/').filter(Boolean).map((part, index, arr) => (
+                                <React.Fragment key={index}>
+                                    <span className="breadcrumb_separator">/</span>
+                                    <span
+                                        className={`breadcrumb_item ${index === arr.length - 1 && !fileContent ? 'active' : ''}`}
+                                        onClick={() => {
+                                            const path = arr.slice(0, index + 1).join('/');
+                                            if (index === arr.length - 1 && fileContent) {
+                                                // Clicking the filename while viewing it - do nothing or refresh
+                                            } else {
+                                                handleBreadcrumbClick(path);
+                                            }
+                                        }}
+                                    >
+                                        {part}
+                                    </span>
+                                </React.Fragment>
+                            ))}
+                        </div>
+                    </div>
+
                     {fileContent ? (
                         <div className="file_viewer">
                             <div className="file_header">
@@ -371,13 +445,17 @@ function RepoPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {repoData.files.map((file) => (
-                                            <tr key={file.path} className="file_row" onClick={() => handleFileClick(file.path)}>
+                                        {getItemsInDir().map((item) => (
+                                            <tr
+                                                key={item.path}
+                                                className="file_row"
+                                                onClick={() => item.type === 'dir' ? handleDirClick(item.path) : handleFileClick(item.path)}
+                                            >
                                                 <td className="file_name">
-                                                    📄 {file.path}
+                                                    {item.type === 'dir' ? '📁' : '📄'} {item.name}
                                                 </td>
                                                 <td className="file_size">
-                                                    {(file.size / 1024).toFixed(1)} KB
+                                                    {item.type === 'dir' ? '-' : `${(item.size / 1024).toFixed(1)} KB`}
                                                 </td>
                                             </tr>
                                         ))}
@@ -385,7 +463,7 @@ function RepoPage() {
                                 </table>
                             </div>
 
-                            {repoData.readme && (
+                            {repoData.readme && currentDir === '' && (
                                 <div className="readme_container">
                                     <h3>README.md</h3>
                                     <div className="readme_content">
@@ -395,7 +473,7 @@ function RepoPage() {
                             )}
                         </div>
                     )}
-                </>
+                </div>
             )}
 
             {activeTab === 'commits' && (

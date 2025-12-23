@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"vcs/auth"
+	vcsdb "vcs/database"
+	"vcs/utils"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
@@ -18,32 +20,6 @@ import (
 
 const maxFileSize = 5 * 1024 * 1024 // 5 MB
 
-func initDB() (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", ".pmg/vcs.db")
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = db.Exec(`
-	CREATE TABLE IF NOT EXISTS files (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		path TEXT NOT NULL,
-		hash TEXT NOT NULL,
-		last_updated INTEGER NOT NULL,
-		commit_message TEXT NOT NULL,
-		author TEXT NOT NULL,
-		commit_id TEXT NOT NULL,
-		is_synced INTEGER DEFAULT 0
-	)
-	`)
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	fmt.Println("Database initialized")
-	return db, nil
-}
 
 func hashFileContents(path string) (string, error) {
 	f, err := os.Open(path)
@@ -97,11 +73,10 @@ func ExecuteInit() {
 		return
 	}
 
-	initDB()
+	_, _ = vcsdb.InitDB()
 
 	fmt.Println("Enter username as used on website :")
-	var author string
-	fmt.Scanln(&author)
+	author := utils.ReadInput()
 	// save name in file 
 	authorFile, err := os.Create(".pmg/author.txt")
 	if err != nil {
@@ -125,8 +100,7 @@ func ExecuteInit() {
 	defer file.Close()
 
 	fmt.Println("Please enter api key from PMG website")
-	var apiKey string
-	fmt.Scanln(&apiKey)
+	apiKey := utils.ReadInput()
 	// save to file
 	_, err = file.WriteString(apiKey)
 	if err != nil {
@@ -135,8 +109,7 @@ func ExecuteInit() {
 	}
 
 	fmt.Println("Please enter project name. This name will be visible on the website")
-	var projectName string
-	fmt.Scanln(&projectName)
+	projectName := utils.ReadInput()
 	// save to file
 	projectFile, err := os.Create(".pmg/project_name.txt")
 	if err != nil {
@@ -178,7 +151,7 @@ func ExecuteAdd() {
 	}
 
 	// Initialize database to check for existing files
-	db, dbErr := initDB()
+	db, dbErr := vcsdb.InitDB()
 	if dbErr != nil {
 		fmt.Println("error initializing database:", dbErr)
 		return
@@ -305,7 +278,7 @@ func ExecuteCommit() {
 	fmt.Println("committing files to PMG VCS...")
 	
 	// Initialize database
-	db, dbErr := initDB()
+	db, dbErr := vcsdb.InitDB()
 	if dbErr != nil {
 		fmt.Println("error initializing database:", dbErr)
 		return
@@ -334,14 +307,7 @@ func ExecuteCommit() {
 
 	fmt.Println("please enter commit message (max 50 characters):")
 
-	reader := bufio.NewReader(os.Stdin)
-	commitMsg, err := reader.ReadString('\n')
-	if err != nil {
-		fmt.Println("error reading input:", err)
-		return
-	}
-
-	commitMsg = strings.TrimSpace(commitMsg)
+	commitMsg := utils.ReadInput()
 
 	if len(commitMsg) > 50 {
 		fmt.Println("commit message exceeds 50 characters")
