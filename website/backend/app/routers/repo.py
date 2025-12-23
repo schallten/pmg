@@ -12,6 +12,7 @@ from datetime import datetime
 from ..database import get_db
 from ..models import User, Project, Commit, FileRecord, RepoDetails, Star
 from ..dependencies import get_current_user
+from ..consistency import run_consistency_check_if_needed
 
 router = APIRouter(prefix="/api")
 
@@ -249,6 +250,9 @@ def get_repository(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
+    # Run consistency check with cooldown
+    run_consistency_check_if_needed(db)
+    
     try:
         project_owner = db.query(User).filter(User.username == username).first()
 

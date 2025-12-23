@@ -6,6 +6,7 @@ import json
 import time
 from ..database import get_db
 from ..models import User, Project
+from ..consistency import run_consistency_check_if_needed
 
 router = APIRouter(prefix="/api")
 
@@ -45,6 +46,9 @@ def search_projects(
 def get_latest_repos(
     db: Session = Depends(get_db)
 ):
+    # Run consistency check with cooldown
+    run_consistency_check_if_needed(db)
+
     try:
         # Check if cache exists and is valid
         if os.path.exists(CACHE_FILE):
@@ -93,6 +97,9 @@ def get_profile(
     username: str,
     db: Session = Depends(get_db)
 ):
+    # Run consistency check with cooldown
+    run_consistency_check_if_needed(db)
+
     try:
         user = db.query(User).filter(User.username == username).first()
         if not user:
