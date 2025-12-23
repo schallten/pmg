@@ -1,7 +1,29 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { API_BASE_URL } from "../config";
 
 export default function Hero() {
+    const [latestRepos, setLatestRepos] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchLatestRepos = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/latest-repos`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setLatestRepos(data.projects);
+                }
+            } catch (error) {
+                console.error("Error fetching latest repos:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchLatestRepos();
+    }, []);
+
     return (
         <>
             <div className="hero">
@@ -16,7 +38,33 @@ export default function Hero() {
                 </div>
             </div>
 
-            {/* Non-Goals Section */}
+            {/* Latest Repositories Section */}
+            <div className="features_section">
+                <h2 className="section_heading">Latest Repositories</h2>
+                {loading ? (
+                    <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>Loading latest repositories...</p>
+                ) : (
+                    <div className="features_grid">
+                        {latestRepos.length > 0 ? (
+                            latestRepos.map((repo) => (
+                                <div key={`${repo.username}-${repo.project_name}`} className="feature_card">
+                                    <Link to={`/repo/${repo.username}/${repo.project_name}`} style={{ textDecoration: 'none' }}>
+                                        <h3>{repo.project_name}</h3>
+                                    </Link>
+                                    <p>by <Link to={`/profile/${repo.username}`} style={{ color: '#58a6ff', textDecoration: 'none' }}>{repo.username}</Link></p>
+                                    <p style={{ fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                                        Updated {new Date(repo.last_updated).toLocaleDateString()}
+                                    </p>
+                                </div>
+                            ))
+                        ) : (
+                            <p style={{ textAlign: 'center', gridColumn: '1/-1', color: 'rgba(255,255,255,0.5)' }}>No repositories found.</p>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Non-Goals Section ... rest of the file */}
             <div className="features_section">
                 <h2 className="section_heading">Explicit Non-Goals</h2>
                 <p className="section_subtext">This is defensive engineering documentation. PMG does not try to solve:</p>

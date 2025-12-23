@@ -35,6 +35,32 @@ def search_projects(
         print(f"Error searching projects: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to search projects: {str(e)}")
 
+@router.get("/latest-repos")
+def get_latest_repos(
+    db: Session = Depends(get_db)
+):
+    try:
+        projects = db.query(Project).order_by(Project.last_updated.desc()).limit(5).all()
+        
+        result = []
+        for project in projects:
+            owner = db.query(User).filter(User.id == project.user_id).first()
+            if not owner:
+                continue
+            result.append({
+                "username": owner.username,
+                "project_name": project.project_name,
+                "created_at": project.created_at.isoformat(),
+                "last_updated": project.last_updated.isoformat()
+            })
+        
+        return {
+            "projects": result
+        }
+    except Exception as e:
+        print(f"Error getting latest repos: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get latest repos: {str(e)}")
+
 @router.get("/profile/{username}")
 def get_profile(
     username: str,
