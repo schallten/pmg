@@ -169,7 +169,7 @@ go build -o vcs main.go
                                 {`cd web-ide
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install flask psutil pywebview
 python main.py`}
                             </code>
                         </pre>

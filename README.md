@@ -70,6 +70,16 @@ Acts as the system’s source of truth.
 * Repository metadata management
 * Static project hosting support
 
+### Web IDE (Python/Pywebview)
+
+A desktop-based code editor for local development.
+
+* File system management (create, delete, edit files)
+* Integrated terminal
+* Media file support (images, video, audio)
+* Plugin system for extensibility
+* Recent workspaces management
+
 ---
 
 ## 🛠️ Tech Stack
@@ -128,6 +138,7 @@ The backend will be available at `http://localhost:8000`.
 ```bash
 cd website/frontend
 npm install
+# Create .env with VITE_API_URL=http://localhost:8000
 npm run dev
 ```
 
@@ -135,7 +146,19 @@ The web interface will be available at `http://localhost:5173`.
 
 ---
 
-### 3. VCS CLI Setup
+### 3. Web IDE Setup
+
+```bash
+cd web-ide
+python -m venv .venv
+source .venv/bin/activate
+pip install flask psutil pywebview
+python main.py
+```
+
+---
+
+### 4. VCS CLI Setup
 
 ```bash
 cd vcs
