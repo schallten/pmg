@@ -2,11 +2,8 @@ package commands
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,19 +18,6 @@ import (
 const maxFileSize = 5 * 1024 * 1024 // 5 MB
 
 
-func hashFileContents(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	hasher := sha256.New()
-	if _, err := io.Copy(hasher, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
 
 // GetProjectName reads the project name from the configuration file
 func GetProjectName() (string, error) {
@@ -263,7 +247,7 @@ func ExecuteAdd() {
 			return nil
 		}
 
-		hash, hashErr := hashFileContents(path)
+		hash, hashErr := utils.HashFileContents(path)
 		if hashErr != nil {
 			fmt.Println("error hashing file:", hashErr)
 			return nil
@@ -407,7 +391,7 @@ func ExecuteCommit() {
 			hash = "DELETED"
 		} else {
 			path = line
-			hash, hashErr = hashFileContents(path)
+			hash, hashErr = utils.HashFileContents(path)
 			if hashErr != nil {
 				fmt.Println("error hashing file:", path, hashErr)
 				continue

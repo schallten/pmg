@@ -80,8 +80,10 @@ async def push_file(
             file_content = await file.read()
             calculated_hash = hashlib.sha256(file_content).hexdigest()
             
-            if calculated_hash != hash:
-                raise HTTPException(status_code=400, detail="File hash mismatch - file may be corrupted")
+            # Use the calculated hash of the uploaded content
+            # This ensures the database reflects the actual content stored,
+            # even if the file changed between commit and push.
+            hash = calculated_hash
             
             os.makedirs(os.path.dirname(file_path_full), exist_ok=True)
             

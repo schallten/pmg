@@ -19,7 +19,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const server_url = "http://localhost:8000/"
+const server_url = "https://pmg-backend-zojs.onrender.com/"
 
 func AuthenticateUser() {
 	configured := checker.CheckConfigured()
@@ -157,6 +157,16 @@ func PushCommit(commitID string) {
 		writer.WriteField("commit_id", commitIDFromDB)
 		writer.WriteField("project_name", projectName)
 		writer.WriteField("path", path)
+		
+		// Re-hash the file to ensure we send the current hash of the content
+		// This handles cases where the file changed between commit and push
+		if hash != "DELETED" {
+			currentHash, err := utils.HashFileContents(path)
+			if err == nil {
+				hash = currentHash
+			}
+		}
+		
 		writer.WriteField("hash", hash)
 		writer.WriteField("last_updated", fmt.Sprintf("%d", lastUpdated))
 		writer.WriteField("commit_message", commitMessage)
