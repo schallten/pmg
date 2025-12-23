@@ -31,7 +31,7 @@ class Project(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     project_name = Column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_updated: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     
     user = relationship("User", back_populates="projects")
     commits = relationship("Commit", back_populates="project")

@@ -118,6 +118,14 @@ async def push_file(
         # Update project timestamp
         project.last_updated = datetime.utcnow()
         db.commit()
+
+        # Invalidate latest repos cache
+        cache_file = "temp/latest_repos_cache.json"
+        if os.path.exists(cache_file):
+            try:
+                os.remove(cache_file)
+            except Exception as e:
+                print(f"Warning: Failed to invalidate cache: {e}")
         
         return {
             "success": "true",

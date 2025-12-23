@@ -5,17 +5,22 @@ import { API_BASE_URL } from "../config";
 export default function Hero() {
     const [latestRepos, setLatestRepos] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         const fetchLatestRepos = async () => {
             try {
                 const response = await fetch(`${API_BASE_URL}/api/latest-repos`);
-                if (response.ok) {
-                    const data = await response.json();
-                    setLatestRepos(data.projects);
+                const data = await response.json();
+
+                if (response.ok && !data.error) {
+                    setLatestRepos(data.projects || []);
+                } else {
+                    setError(data.error || "Failed to load repositories");
                 }
             } catch (error) {
                 console.error("Error fetching latest repos:", error);
+                setError("Connection error. Please try again later.");
             } finally {
                 setLoading(false);
             }
@@ -43,6 +48,8 @@ export default function Hero() {
                 <h2 className="section_heading">Latest Repositories</h2>
                 {loading ? (
                     <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>Loading latest repositories...</p>
+                ) : error ? (
+                    <p style={{ textAlign: 'center', color: '#f85149' }}>{error}</p>
                 ) : (
                     <div className="features_grid">
                         {latestRepos.length > 0 ? (
