@@ -20,6 +20,7 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     "http://localhost:5173",
     "http://localhost:3000",
+    "https://pmg-tuie.onrender.com"
 ]
 
 app.add_middleware(
