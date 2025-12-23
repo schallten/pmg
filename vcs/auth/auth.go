@@ -423,10 +423,19 @@ func Fetch(){
 		return
 	}
 
-	// server time to unix time
-	serverTime,err := time.Parse(time.RFC3339, serverTimestamp)
-	if err!=nil{
-		fmt.Println("error parsing server timestamp:",err)
+	// try multiple layouts for parsing server timestamp
+	var serverTime time.Time
+	layouts := []string{time.RFC3339, "2006-01-02T15:04:05.999999", "2006-01-02T15:04:05"}
+	
+	for _, layout := range layouts {
+		serverTime, err = time.Parse(layout, serverTimestamp)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		fmt.Println("error parsing server timestamp:", err)
 		return
 	}
 	serverUnixTime := serverTime.Unix()
@@ -454,6 +463,7 @@ func Fetch(){
 
 	if err == sql.ErrNoRows {
 		fmt.Println("\nno local commits found, but server has commits")
+		fmt.Println("would you like to pull? (y/n) :")
 		answer := utils.ReadInput()
 
 		if strings.ToLower(answer) == "y" {

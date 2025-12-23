@@ -12,6 +12,7 @@ function Header({ user, onLoginClick, onSignupClick, onLogoutClick }) {
       <SearchBar />
 
       <nav className="header_nav">
+        <Link to="/docs" className="header_docs_link">Docs</Link>
         {user ? (
           <>
             <span style={{ color: '#e6edf3', fontSize: '0.95rem' }}>Hi, {user}</span>

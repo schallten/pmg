@@ -1,128 +1,193 @@
-# PMG - Poor Man's Git
+# PMG — Poor Man’s Git
 
-PMG is a simplified, self-hosted version control system and web interface, inspired by GitHub. It consists of a custom CLI tool for version control, a robust backend API, and a modern web frontend for browsing repositories.
+PMG is an **educational experiment** in building a vertically integrated developer platform.
+The project explores version control internals, client–server synchronization, static hosting, and developer tooling by intentionally re-implementing **simplified** versions of systems like Git, GitHub Pages, and repository browsers.
 
-## 🚀 Features
+PMG prioritizes **clarity, debuggability, and architectural learning** over feature completeness, scalability, or production hardening.
 
-*   **Custom VCS CLI**: A Go-based command-line tool to track files, commit changes, and sync with the server.
-    *   `init`: Initialize a new repository.
-    *   `add`: Stage files for commit (supports `ignore.txt`).
-    *   `commit`: Save changes to the local history.
-    *   `push`: Upload commits to the server.
-    *   `pull`: Download and merge changes from the server.
-    *   `fetch`: Check for updates from the server.
-*   **Web Interface**: A React-based frontend to browse code.
-    *   **Authentication**: User Signup and Login.
-    *   **Repository Browser**: View files, folder structure, and file contents.
-    *   **Commit History**: View a list of all commits for a project.
-    *   **Language Statistics**: Visual breakdown of programming languages used in a repo.
-    *   **Search**: Search for projects by name.
-    *   **Dark Mode**: Sleek, developer-friendly dark theme.
-*   **Backend API**: FastAPI server handling data persistence, file storage, and authentication.
+---
+
+## 🎯 Non-Goals
+
+PMG is intentionally limited. It does **not** attempt to provide:
+
+* **Full Git compatibility**
+  No branching, rebasing, or DAG-based commit history.
+* **Distributed offline-first workflows**
+  The system assumes direct client–server synchronization.
+* **Large-scale repository performance**
+  Not optimized for massive codebases or monorepos.
+* **Multi-user real-time collaboration**
+  Focused on single-user or sequential workflows.
+* **Enterprise-grade security guarantees**
+  Security mechanisms exist for learning purposes, not production use.
+
+---
+
+## 📐 Design Trade-offs
+
+* **Linear History Model**
+  Chosen to simplify synchronization semantics and make divergence explicit.
+  *Trade-off: limits collaboration patterns and prevents complex workflows that require branching.*
+
+* **Folder-based Project Naming:** The system prioritizes the containing folder's name for repository identification on the server, emphasizing the link between local structure and remote state.
+  *Trade-off: This can lead to naming conflicts if multiple users push projects with the same folder name, requiring manual resolution or unique naming conventions.*
+
+These trade-offs are deliberate and documented to highlight *why* mature systems like Git are designed differently.
+
+---
+
+## 🚀 Features (Educational Implementations)
+
+### Custom VCS CLI (Go)
+
+A lightweight command-line tool for tracking files and syncing with the PMG server.
+
+* `init` — Initialize a new repository
+* `add` — Stage files for commit (supports `ignore.txt`)
+* `commit` — Record changes in local history
+* `push` — Upload commits to the server
+* `pull` — Download and reconcile changes from the server
+* `fetch` — Check server state without modifying local files
+
+### Web Interface (React)
+
+A repository browser and project dashboard.
+
+* User authentication (signup & login)
+* Repository file browser with folder navigation
+* Commit history viewer
+* README rendering
+* Programming language statistics
+* Project search
+
+### Backend API (FastAPI)
+
+Acts as the system’s source of truth.
+
+* File storage and commit persistence
+* Authentication via API keys
+* Repository metadata management
+* Static project hosting support
+
+---
 
 ## 🛠️ Tech Stack
 
-*   **VCS CLI**: Go (Golang), SQLite (local state)
-*   **Backend**: Python (FastAPI), PostgreSQL (Dockerized), SQLAlchemy
-*   **Frontend**: React, Vite, CSS Modules
+* **VCS CLI**: Go, SQLite (local state tracking)
+* **Backend**: Python (FastAPI), PostgreSQL (Dockerized), SQLAlchemy
+* **Frontend**: React, Vite, CSS Modules
+
+The stack was chosen to emphasize **strong typing**, **explicit state management**, and **clear client–server boundaries**.
+
+---
 
 ## 📦 Installation & Setup
 
 ### Prerequisites
-*   Go (for VCS)
-*   Python 3.11+ (for Backend)
-*   Node.js & npm (for Frontend)
-*   Docker (for PostgreSQL database)
+
+* Go (VCS CLI)
+* Python 3.11+ (Backend)
+* Node.js & npm (Frontend)
+* Docker (PostgreSQL)
+
+---
 
 ### 1. Backend Setup
 
-Navigate to the backend directory:
 ```bash
 cd website/backend
-```
-
-Create a virtual environment and install dependencies:
-```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
-*(Note: Ensure `uvicorn`, `fastapi`, `sqlalchemy`, `psycopg2-binary`, `python-multipart`, `python-dotenv` are installed)*
 
-Start the PostgreSQL database (Docker):
+Start PostgreSQL:
+
 ```bash
-docker run --name postgres -e POSTGRES_USER=myuser -e POSTGRES_PASSWORD=mypassword -e POSTGRES_DB=mydb -p 6969:5432 -d postgres:16
+docker run --name postgres \
+  -e POSTGRES_USER=myuser \
+  -e POSTGRES_PASSWORD=mypassword \
+  -e POSTGRES_DB=mydb \
+  -p 6969:5432 \
+  -d postgres:16
 ```
 
-Run the server:
+Run the API server:
+
 ```bash
-uv run uvicorn main:app --reload
+uvicorn main:app --reload
 ```
-The server will start at `http://localhost:8000`.
+
+The backend will be available at `http://localhost:8000`.
+
+---
 
 ### 2. Frontend Setup
 
-Navigate to the frontend directory:
 ```bash
 cd website/frontend
-```
-
-Install dependencies:
-```bash
 npm install
-```
-
-Run the development server:
-```bash
 npm run dev
 ```
-The web app will be available at `http://localhost:5173`.
+
+The web interface will be available at `http://localhost:5173`.
+
+---
 
 ### 3. VCS CLI Setup
 
-Navigate to the VCS directory:
 ```bash
 cd vcs
-```
-
-Build the binary:
-```bash
 go build -o vcs
 ```
 
-You can now use the `./vcs` binary in your projects.
+The `vcs` binary can now be used in any project directory.
+
+---
 
 ## 📖 Usage Guide
 
 ### Web Interface
-1.  Open the frontend (`http://localhost:5173`).
-2.  **Sign Up** for a new account.
-3.  **Copy your API Key** from the success modal (you will need this for the CLI).
+
+1. Open `http://localhost:5173`
+2. Create an account
+3. Copy your **API Key** from the dashboard (required for CLI access)
 
 ### CLI Workflow
-1.  Go to a project directory you want to track.
-2.  Initialize PMG:
-    ```bash
-    /path/to/pmg/vcs/vcs init
-    ```
-    *   Enter your **Username** (from the website).
-    *   Enter your **API Key**.
-    *   Enter a **Project Name**.
-3.  Add files:
-    ```bash
-    /path/to/pmg/vcs/vcs add
-    ```
-    *(Create an `ignore.txt` file to exclude specific files/folders)*
-4.  Commit changes:
-    ```bash
-    /path/to/pmg/vcs/vcs commit
-    ```
-5.  Push to server:
-    ```bash
-    /path/to/pmg/vcs/vcs push
-    ```
 
-### Viewing Code
-Once pushed, go back to the Web Interface. Use the **Search Bar** to find your project. You can now view your code, read the README, check language stats, and see your commit history!
+Initialize a project:
 
+```bash
+/path/to/vcs init
+```
+
+Stage files:
+
+```bash
+/path/to/vcs add
+```
+
+Commit changes:
+
+```bash
+/path/to/vcs commit
+```
+
+Push to the server:
+
+```bash
+/path/to/vcs push
+```
+
+*(Create an `ignore.txt` file in the project root to exclude files or directories.)*
+
+---
+
+### Viewing Projects
+
+After pushing, return to the web interface and search for your project by name.
+You can browse files, view commit history, read the README, and inspect language statistics.
+
+---
 

@@ -13,7 +13,7 @@ func main() {
     args := os.Args
 
     if (len(args) < 2){
-        fmt.Println("No command provided. Type help to know all commands ")
+        fmt.Println("No command provided. Type 'help' to see all available commands.")
         return
     }
     command := args[1]

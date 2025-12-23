@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../config';
 
 function AuthModal({ mode, onClose, onAuthSuccess }) {
     const [username, setUsername] = useState('');
@@ -19,7 +20,7 @@ function AuthModal({ mode, onClose, onAuthSuccess }) {
         formData.append('email', email);
 
         try {
-            const response = await fetch(`http://localhost:8000${endpoint}`, {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                 method: 'POST',
                 body: formData,
             });

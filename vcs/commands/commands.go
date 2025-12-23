@@ -58,9 +58,53 @@ func ExecuteCommand(command string) {
 		auth.Pull()
 	case "fetch":
 		auth.Fetch()
+	case "help":
+		ExecuteHelp()
 	default:
-		fmt.Println("invalid command")
+		fmt.Println("invalid command. Type 'help' to see available commands.")
 	}
+}
+
+func ExecuteHelp() {
+	fmt.Println("\nPMG VCS - Poor Man's Git (Educational Experiment)")
+	fmt.Println("=================================================")
+	fmt.Println("\nUsage: vcs <command> [arguments]")
+	fmt.Println("\nAvailable Commands:")
+	
+	fmt.Println("\n  init")
+	fmt.Println("    Initialize a new repository in the current directory.")
+	fmt.Println("    Prompts for username and API key.")
+	fmt.Println("    Note: The project name on the server is derived from the folder name.")
+	
+	fmt.Println("\n  add")
+	fmt.Println("    Stage changes for the next commit.")
+	fmt.Println("    Detects new, modified, and deleted files.")
+	fmt.Println("    Uses 'ignore.txt' to skip files/directories.")
+	
+	fmt.Println("\n  commit")
+	fmt.Println("    Record staged changes to the local history.")
+	fmt.Println("    Requires a commit message (max 50 characters).")
+	fmt.Println("    Note: You must 'push' before making a new commit.")
+	
+	fmt.Println("\n  push")
+	fmt.Println("    Upload the latest local commit to the PMG server.")
+	
+	fmt.Println("\n  pull")
+	fmt.Println("    Download and reconcile the latest version from the server.")
+	fmt.Println("    Can be used to clone a project into an empty directory.")
+	
+	fmt.Println("\n  fetch")
+	fmt.Println("    Check server state and compare with local repository.")
+	fmt.Println("    Reports if you are ahead, behind, or up-to-date.")
+	
+	fmt.Println("\n  help")
+	fmt.Println("    Show this detailed help message.")
+	
+	fmt.Println("\nConfiguration:")
+	fmt.Println("  - .pmg/           Internal VCS state directory")
+	fmt.Println("  - ignore.txt      List of files/folders to ignore (one per line)")
+	fmt.Println("\nFor more information, visit the PMG website documentation.")
+	fmt.Println("=================================================\n")
 }
 
 /* COMMANDS */
@@ -135,19 +179,48 @@ func ExecuteAdd() {
 	fmt.Println("adding files to PMG VCS...")
 
 	ignoreFile, err := os.Open("ignore.txt")
-	ignoreMap := make(map[string]bool)
+	var ignorePatterns []string
 
 	if err == nil {
 		defer ignoreFile.Close()
 		scanner := bufio.NewScanner(ignoreFile)
 		for scanner.Scan() {
-			ignoreMap[scanner.Text()] = true
+			line := strings.TrimSpace(scanner.Text())
+			if line != "" && !strings.HasPrefix(line, "#") {
+				// Normalize path separators to / for consistency
+				line = filepath.ToSlash(line)
+				line = strings.TrimSuffix(line, "/")
+				ignorePatterns = append(ignorePatterns, line)
+			}
 		}
-		if err := scanner.Err(); err != nil {
-			fmt.Println("error reading ignore file:", err)
+	}
+
+	isIgnored := func(path string) bool {
+		// Always ignore .pmg directory
+		if strings.HasPrefix(path, ".pmg") || strings.Contains(path, "/.pmg") {
+			return true
 		}
-	} else if !os.IsNotExist(err) {
-		fmt.Println("error opening ignore.txt file:", err)
+
+		normalizedPath := filepath.ToSlash(path)
+		parts := strings.Split(normalizedPath, "/")
+
+		for _, pattern := range ignorePatterns {
+			// Exact match
+			if normalizedPath == pattern {
+				return true
+			}
+			// Directory match (pattern is a prefix of the path)
+			if strings.HasPrefix(normalizedPath, pattern+"/") {
+				return true
+			}
+			// Component match (e.g., "node_modules" should match "src/node_modules/...")
+			for _, part := range parts {
+				if part == pattern {
+					return true
+				}
+			}
+		}
+		return false
 	}
 
 	// Initialize database to check for existing files
@@ -180,7 +253,7 @@ func ExecuteAdd() {
 			return nil
 		}
 
-		if ignoreMap[path] || strings.HasPrefix(path, ".pmg") || strings.Contains(path, "/.pmg") {
+		if isIgnored(path) {
 			// fmt.Println("ignoring file:", path)
 			return nil
 		}
@@ -238,7 +311,7 @@ func ExecuteAdd() {
 		}
 
 		// Check if file is ignored
-		if ignoreMap[path] || strings.HasPrefix(path, ".pmg") || strings.Contains(path, "/.pmg") {
+		if isIgnored(path) {
 			continue
 		}
 

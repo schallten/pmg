@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { API_BASE_URL } from '../config';
 
 function SearchBar() {
     const [query, setQuery] = useState('');
@@ -15,7 +16,7 @@ function SearchBar() {
 
             setLoading(true);
             try {
-                const response = await fetch(`http://localhost:8000/api/search/${query}`);
+                const response = await fetch(`${API_BASE_URL}/api/search/${query}`);
                 if (response.ok) {
                     const data = await response.json();
                     setResults(data.results || []);

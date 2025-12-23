@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../config';
 
 const LANGUAGE_COLORS = {
     'Python': '#3572A5',
@@ -48,7 +49,7 @@ function RepoPage() {
             const token = localStorage.getItem('pmg_api_key');
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-            const repoRes = await fetch(`http://localhost:8000/api/repo/${username}/${project_name}`, {
+            const repoRes = await fetch(`${API_BASE_URL}/api/repo/${username}/${project_name}`, {
                 headers: headers
             });
             if (!repoRes.ok) throw new Error('Repository not found');
@@ -59,14 +60,14 @@ function RepoPage() {
             }
 
             // Fetch languages
-            const langRes = await fetch(`http://localhost:8000/api/repo/${username}/${project_name}/languages`);
+            const langRes = await fetch(`${API_BASE_URL}/api/repo/${username}/${project_name}/languages`);
             if (langRes.ok) {
                 const langData = await langRes.json();
                 setLanguages(langData.languages || {});
             }
 
             // Fetch commits
-            const commitRes = await fetch(`http://localhost:8000/api/repo/${username}/${project_name}/commits`);
+            const commitRes = await fetch(`${API_BASE_URL}/api/repo/${username}/${project_name}/commits`);
             if (commitRes.ok) {
                 const commitData = await commitRes.json();
                 setCommits(commitData.commits || []);
@@ -82,7 +83,7 @@ function RepoPage() {
     const handleFileClick = async (path) => {
         try {
             setLoading(true);
-            const response = await fetch(`http://localhost:8000/api/repo/${username}/${project_name}/file/${path}`);
+            const response = await fetch(`${API_BASE_URL}/api/repo/${username}/${project_name}/file/${path}`);
             if (!response.ok) throw new Error("Failed to fetch file");
             const data = await response.json();
             setFileContent(data);
@@ -152,7 +153,7 @@ function RepoPage() {
         }
 
         try {
-            const response = await fetch(`http://localhost:8000/api/star_repo/${username}/${project_name}`, {
+            const response = await fetch(`${API_BASE_URL}/api/star_repo/${username}/${project_name}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -185,7 +186,7 @@ function RepoPage() {
             const formData = new FormData();
             formData.append('source_path', deploySource);
 
-            const response = await fetch(`http://localhost:8000/api/deploy/${username}/${project_name}`, {
+            const response = await fetch(`${API_BASE_URL}/api/deploy/${username}/${project_name}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -215,7 +216,7 @@ function RepoPage() {
         }
 
         try {
-            const response = await fetch(`http://localhost:8000/api/fork/${username}/${project_name}`, {
+            const response = await fetch(`${API_BASE_URL}/api/fork/${username}/${project_name}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -245,7 +246,7 @@ function RepoPage() {
         }
 
         try {
-            const response = await fetch(`http://localhost:8000/api/delete_repo/${username}/${project_name}`, {
+            const response = await fetch(`${API_BASE_URL}/api/delete_repo/${username}/${project_name}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -273,7 +274,7 @@ function RepoPage() {
         if (!token) return;
 
         try {
-            const response = await fetch(`http://localhost:8000/api/undeploy/${username}/${project_name}`, {
+            const response = await fetch(`${API_BASE_URL}/api/undeploy/${username}/${project_name}`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -321,7 +322,7 @@ function RepoPage() {
                 <div className="repo_actions">
                     {repoData.isDeployed && (
                         <a
-                            href={`http://localhost:8000${repoData.deployment_url}`}
+                            href={`${API_BASE_URL}${repoData.deployment_url}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="visit_site_btn"
@@ -525,12 +526,12 @@ function RepoPage() {
                             <div className="deployment_status">
                                 <p>✅ Your site is live at:</p>
                                 <a
-                                    href={`http://localhost:8000${repoData.deployment_url}`}
+                                    href={`${API_BASE_URL}${repoData.deployment_url}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="deployment_link"
                                 >
-                                    http://localhost:8000{repoData.deployment_url}
+                                    {API_BASE_URL}{repoData.deployment_url}
                                 </a>
 
                                 <button onClick={handleUndeploy} className="btn_danger">

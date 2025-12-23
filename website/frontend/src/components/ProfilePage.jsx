@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../config';
 
 function ProfilePage() {
     const { username } = useParams();
@@ -11,7 +12,7 @@ function ProfilePage() {
         const fetchProfile = async () => {
             try {
                 setLoading(true);
-                const response = await fetch(`http://localhost:8000/api/profile/${username}`);
+                const response = await fetch(`${API_BASE_URL}/api/profile/${username}`);
                 if (!response.ok) {
                     throw new Error('User not found');
                 }
