@@ -1,7 +1,7 @@
 import os
 import time
 from sqlalchemy.orm import Session
-from .models import Project, FileRecord, Commit, User
+from .models import Project, FileRecord, Commit, User, Star, RepoDetails
 
 LAST_CHECK_FILE = "temp/last_consistency_check.txt"
 CHECK_COOLDOWN = 600  # 10 minutes
@@ -51,6 +51,9 @@ def verify_and_cleanup_db(db: Session):
         if not os.path.exists(project_dir):
             print(f"Project directory missing for {owner.username}/{project.project_name}. Cleaning up DB records.")
 
+            # Delete dependent records first to avoid IntegrityError
+            db.query(Star).filter(Star.project_id == project.id).delete()
+            db.query(RepoDetails).filter(RepoDetails.project_id == project.id).delete()
             db.query(FileRecord).filter(FileRecord.commit_id.in_(
                 db.query(Commit.commit_id).filter(Commit.project_id == project.id)
             )).delete(synchronize_session=False)
