@@ -70,9 +70,9 @@ Acts as the system’s source of truth.
 * Repository metadata management
 * Static project hosting support
 
-### Web IDE (Python/Pywebview)
+### Web IDE (Python/Flask)
 
-A desktop-based code editor for local development.
+A browser-based code editor for local development.
 
 * File system management (create, delete, edit files)
 * Integrated terminal
@@ -152,7 +152,7 @@ The web interface will be available at `http://localhost:5173`.
 cd web-ide
 python -m venv .venv
 source .venv/bin/activate
-pip install flask psutil pywebview
+pip install flask psutil
 python main.py
 ```
 
