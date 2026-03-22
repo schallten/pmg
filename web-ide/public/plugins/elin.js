@@ -66,3 +66,29 @@ export function highlight(code, filename) {
     result += escapeHtml(code.substring(lastIndex));
     return result;
 }
+
+export function getSuggestions(text, position, filename) {
+    if (!filename || !filename.endsWith('.elin')) {
+        return [];
+    }
+
+    const keywords = ['let', 'print', 'halt', 'if', 'else', 'end', 'while', 'wend'];
+    
+    // Get the word being typed
+    const lines = text.substring(0, position).split('\n');
+    const currentLine = lines[lines.length - 1];
+    const match = currentLine.match(/\b([a-zA-Z0-9_$]*)$/);
+    
+    if (!match) return [];
+    
+    const prefix = match[1].toLowerCase();
+    if (!prefix) return [];
+    
+    return keywords
+        .filter(k => k.startsWith(prefix))
+        .map(k => ({
+            label: k,
+            insertText: k.substring(prefix.length),
+            detail: 'Keyword'
+        }));
+}

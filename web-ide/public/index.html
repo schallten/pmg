@@ -57,11 +57,13 @@
                     <button id="settings-btn">⚙️ Settings</button>
                 </div>
             </div>
+            <div id="editor-tabs" class="editor-tabs"></div>
             <div class="editor-container">
                 <div id="line-numbers" class="line-numbers"></div>
                 <div class="editor-wrapper">
                     <pre id="highlighting" aria-hidden="true"><code id="highlighting-content"></code></pre>
                     <textarea id="code-editor" spellcheck="false"></textarea>
+                    <div id="suggestions-box" style="display: none; position: absolute; z-index: 100; background: var(--bg-sidebar); border: 1px solid var(--accent); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); font-family: var(--font-mono); font-size: 13px;"></div>
                 </div>
                 <div id="media-preview" class="media-preview"></div>
             </div>
@@ -119,6 +121,7 @@
                         <option value="dracula">Dracula</option>
                         <option value="solarized-dark">Solarized Dark</option>
                         <option value="light">Light</option>
+                        <option value="rgb">RGB (Animated)</option>
                     </select>
                 </div>
 
@@ -163,7 +166,10 @@
         <div class="modal-content chat-modal-content">
             <div class="modal-header">
                 <h2>AI Chat Assistant</h2>
-                <span class="close-btn" id="close-chat">&times;</span>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <span id="clear-chat-btn" style="cursor: pointer; font-size: 0.85em; opacity: 0.7; color: var(--text-secondary);" title="Clear Chat History">🧹 Clear Chat</span>
+                    <span class="close-btn" id="close-chat">&times;</span>
+                </div>
             </div>
             <div class="modal-body">
                 <div class="api-key-section">

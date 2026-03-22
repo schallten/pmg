@@ -6,13 +6,14 @@
 export const isEnabled = { value: false };
 
 let apiKey = localStorage.getItem('gemini-api-key') || '';
+let conversationHistory = [];
 
 export function getName() {
     return "AI Chat Assistant";
 }
 
 export function getDescription() {
-    return "Chat with Gemini AI to get help with your code. Requires API key.";
+    return "Chat with Gemini AI to get help with your code. Maintains conversation context.";
 }
 
 export function getApiKey() {
@@ -24,37 +25,55 @@ export function setApiKey(key) {
     localStorage.setItem('gemini-api-key', key);
 }
 
+export function clearHistory() {
+    conversationHistory = [];
+}
+
 export async function sendMessage(message, codeContext = '') {
     if (!apiKey) {
         throw new Error('API key not set');
     }
 
-    const prompt = codeContext
-        ? `Context: I'm working on this code:\n\`\`\`\n${codeContext}\n\`\`\`\n\nQuestion: ${message}`
-        : message;
+    let prompt = message;
+    if (codeContext) {
+        prompt = `Context: I'm working on this code:\n\`\`\`\n${codeContext}\n\`\`\`\n\nQuestion: ${message}`;
+    }
+
+    // Add user message to history
+    conversationHistory.push({
+        role: "user",
+        parts: [{ text: prompt }]
+    });
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-02-05:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }]
+                contents: conversationHistory
             })
         });
 
         if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `API request failed: ${response.status}`);
         }
 
         const data = await response.json();
-        return data.candidates[0].content.parts[0].text;
+        const assistantResponse = data.candidates[0].content.parts[0].text;
+
+        // Add assistant response to history
+        conversationHistory.push({
+            role: "model",
+            parts: [{ text: assistantResponse }]
+        });
+
+        return assistantResponse;
     } catch (error) {
+        // Remove the failed user message from history so it doesn't break future attempts
+        conversationHistory.pop();
         throw new Error(`Failed to get AI response: ${error.message}`);
     }
 }

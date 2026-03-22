@@ -48,14 +48,157 @@ body.theme-solarized-dark {
 
 body.theme-light {
     --bg-dark: #ffffff;
-    --bg-sidebar: #f3f4f6;
+    --bg-sidebar: #f9fafb;
     --bg-editor: #ffffff;
-    --text-primary: #1f2937;
-    --text-secondary: #6b7280;
-    --accent: #3b82f6;
-    --accent-hover: #2563eb;
-    --border: rgba(0, 0, 0, 0.1);
-    --hover: rgba(0, 0, 0, 0.05);
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --border: rgba(0, 0, 0, 0.08);
+    --hover: rgba(0, 0, 0, 0.03);
+    --shadow: rgba(0, 0, 0, 0.1);
+    
+    /* Syntax for light theme */
+    --syntax-comment: #6a737d;
+    --syntax-string: #032f62;
+    --syntax-number: #005cc5;
+    --syntax-keyword: #d73a49;
+    --syntax-operator: #d73a49;
+    --syntax-function: #6f42c1;
+}
+
+body.theme-rgb {
+    --bg-dark: #050505;
+    --bg-sidebar: #0a0a0a;
+    --bg-editor: #050505;
+    --text-primary: #ffffff;
+    --text-secondary: #aaaaaa;
+    --accent: #ff00ea;
+    --accent-hover: #00ffea;
+    --border: rgba(255, 255, 255, 0.15);
+    --hover: rgba(255, 255, 255, 0.1);
+    --shadow: rgba(0, 0, 0, 0.5);
+}
+
+@keyframes rainbow-border {
+    0% { border-color: red; box-shadow: 0 0 10px rgba(255, 0, 0, 0.3); }
+    16% { border-color: orange; box-shadow: 0 0 10px rgba(255, 165, 0, 0.3); }
+    33% { border-color: yellow; box-shadow: 0 0 10px rgba(255, 255, 0, 0.3); }
+    50% { border-color: green; box-shadow: 0 0 10px rgba(0, 255, 0, 0.3); }
+    66% { border-color: blue; box-shadow: 0 0 10px rgba(0, 0, 255, 0.3); }
+    83% { border-color: indigo; box-shadow: 0 0 10px rgba(75, 0, 130, 0.3); }
+    100% { border-color: violet; box-shadow: 0 0 10px rgba(238, 130, 238, 0.3); }
+}
+
+body.theme-rgb .sidebar,
+body.theme-rgb .editor-header,
+body.theme-rgb .modal-content,
+body.theme-rgb .welcome-box,
+body.theme-rgb .status-bar,
+body.theme-rgb .tab.active {
+    border: 1px solid;
+    animation: rainbow-border 5s linear infinite;
+}
+
+body.theme-rgb .welcome-box h1 {
+    background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: hue-shift 3s linear infinite;
+}
+
+@keyframes hue-shift {
+    from { filter: hue-rotate(0deg); }
+    to { filter: hue-rotate(360deg); }
+}
+
+/* Editor Tabs */
+.editor-tabs {
+    display: flex;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+    height: 36px;
+}
+
+.editor-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.tab {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    height: 100%;
+    background: transparent;
+    border-right: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s;
+    min-width: 120px;
+    max-width: 200px;
+    position: relative;
+}
+
+.tab:hover {
+    background: var(--hover);
+    color: var(--text-primary);
+}
+
+.tab.active {
+    background: var(--bg-editor);
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+}
+
+.tab-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tab-close {
+    margin-left: 8px;
+    font-size: 14px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+    padding: 2px;
+    border-radius: 4px;
+}
+
+.tab-close:hover {
+    opacity: 1;
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+/* Base syntax colors (One Dark) */
+:root {
+    --bg-dark: #0f111a;
+    --bg-sidebar: #131520;
+    --bg-editor: #0f111a;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --border: rgba(255, 255, 255, 0.08);
+    --hover: rgba(255, 255, 255, 0.05);
+    --shadow: rgba(0, 0, 0, 0.25);
+    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", Consolas, Monaco, monospace;
+    
+    /* Syntax base */
+    --syntax-comment: #5c6370;
+    --syntax-string: #98c379;
+    --syntax-number: #d19a66;
+    --syntax-keyword: #c678dd;
+    --syntax-operator: #56b6c2;
+    --syntax-function: #61afef;
 }
 
 * {
@@ -103,11 +246,11 @@ body {
 #welcome-screen {
     justify-content: center;
     align-items: center;
-    background: radial-gradient(circle at center top, #1a1d2d 0%, var(--bg-dark) 100%);
+    background: radial-gradient(circle at center top, var(--bg-sidebar) 0%, var(--bg-dark) 100%);
 }
 
 .welcome-box {
-    background: rgba(19, 21, 32, 0.7);
+    background: var(--bg-sidebar);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     padding: 3rem;
@@ -115,14 +258,19 @@ body {
     border: 1px solid var(--border);
     text-align: center;
     width: 460px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.02);
+    box-shadow: 0 25px 50px -12px var(--shadow), 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.theme-light .welcome-box {
+    background: #ffffff;
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1);
 }
 
 .welcome-box h1 {
     font-size: 2.2rem;
     font-weight: 700;
     margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+    background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -426,9 +574,9 @@ body {
 
 .line-numbers {
     width: 60px;
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--hover);
     border-right: 1px solid var(--border);
-    color: #475569;
+    color: var(--text-secondary);
     text-align: right;
     padding: 24px 16px;
     font-family: var(--font-mono);
@@ -484,30 +632,30 @@ body {
     /* Let clicks pass through to textarea */
 }
 
-/* Syntax Highlighting Tokens (One Dark Pro inspired) */
+/* Syntax Highlighting Tokens (Theme aware) */
 .token.comment {
-    color: #5c6370;
+    color: var(--syntax-comment);
     font-style: italic;
 }
 
 .token.string {
-    color: #98c379;
+    color: var(--syntax-string);
 }
 
 .token.number {
-    color: #d19a66;
+    color: var(--syntax-number);
 }
 
 .token.keyword {
-    color: #c678dd;
+    color: var(--syntax-keyword);
 }
 
 .token.operator {
-    color: #56b6c2;
+    color: var(--syntax-operator);
 }
 
 .token.function {
-    color: #61afef;
+    color: var(--syntax-function);
 }
 
 /* Modal Styles */

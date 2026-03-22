@@ -44,13 +44,18 @@ const themeSelect = document.getElementById('theme-select');
 const newTerminalBtn = document.getElementById('new-terminal');
 const killTerminalBtn = document.getElementById('kill-terminal');
 const terminalTabsContainer = document.getElementById('terminal-tabs');
+const suggestionsBox = document.getElementById('suggestions-box');
+const editorTabs = document.getElementById('editor-tabs');
 
 // --- 2. State Variables ---
 let currentFilePath = null;
+let openFiles = {}; // { path: { content, name } }
 let coreModules = [];
 let plugins = [];
 let customPlugins = [];
 let isWordWrapEnabled = false;
+let activeSuggestionIndex = 0;
+let currentSuggestions = [];
 
 // Terminal multi-state
 let terminals = {}; // { id: { instance, fitAddon, name, container } }
@@ -151,6 +156,20 @@ function getTerminalTheme(theme) {
                 blue: '#3b82f6',
                 magenta: '#8b5cf6',
                 cyan: '#06b6d4',
+                white: '#ffffff'
+            };
+        case 'rgb':
+            return {
+                background: '#050505',
+                foreground: '#ffffff',
+                cursor: '#ff00ea',
+                black: '#000000',
+                red: '#ff0000',
+                green: '#00ff00',
+                yellow: '#ffff00',
+                blue: '#0000ff',
+                magenta: '#ff00ff',
+                cyan: '#00ffff',
                 white: '#ffffff'
             };
         default: // One Dark
@@ -655,9 +674,11 @@ if (wrapBtn) {
 codeEditor.addEventListener('input', () => {
     updateLineNumbers();
     updateHighlighting();
+    updateSuggestions();
 });
 codeEditor.addEventListener('scroll', syncScroll);
 codeEditor.addEventListener('keydown', handleEditorKeys);
+codeEditor.addEventListener('click', hideSuggestions);
 
 // --- 5. Functions ---
 
@@ -722,7 +743,123 @@ function updateHighlighting() {
     }
 }
 
+function updateSuggestions() {
+    const text = codeEditor.value;
+    const position = codeEditor.selectionStart;
+    const filename = currentFilePath ? currentFilePath.split('/').pop() : '';
+    
+    currentSuggestions = [];
+    
+    // Collect suggestions from plugins
+    for (const plugin of plugins.concat(customPlugins)) {
+        if (plugin.isEnabled && plugin.isEnabled.value !== false && typeof plugin.getSuggestions === 'function') {
+            const suggestions = plugin.getSuggestions(text, position, filename);
+            if (suggestions && suggestions.length > 0) {
+                currentSuggestions = currentSuggestions.concat(suggestions);
+            }
+        }
+    }
+    
+    if (currentSuggestions.length > 0) {
+        showSuggestions();
+    } else {
+        hideSuggestions();
+    }
+}
+
+function showSuggestions() {
+    activeSuggestionIndex = 0;
+    renderSuggestions();
+    
+    // Position suggestions box near cursor
+    const { top, left } = getCursorCoordinates();
+    suggestionsBox.style.top = `${top + 20}px`;
+    suggestionsBox.style.left = `${left}px`;
+    suggestionsBox.style.display = 'block';
+}
+
+function renderSuggestions() {
+    suggestionsBox.innerHTML = '';
+    currentSuggestions.forEach((suggestion, index) => {
+        const item = document.createElement('div');
+        item.style.padding = '4px 10px';
+        item.style.cursor = 'pointer';
+        item.style.background = index === activeSuggestionIndex ? 'var(--accent)' : 'transparent';
+        item.style.color = index === activeSuggestionIndex ? 'white' : 'var(--text-primary)';
+        item.innerHTML = `<strong>${suggestion.label}</strong> <small style="opacity: 0.7">${suggestion.detail || ''}</small>`;
+        
+        item.onclick = (e) => {
+            e.stopPropagation();
+            applySuggestion(suggestion);
+        };
+        
+        suggestionsBox.appendChild(item);
+    });
+}
+
+function applySuggestion(suggestion) {
+    const start = codeEditor.selectionStart;
+    const textToInsert = suggestion.insertText || '';
+    
+    const before = codeEditor.value.substring(0, start);
+    const after = codeEditor.value.substring(start);
+    
+    codeEditor.value = before + textToInsert + after;
+    codeEditor.selectionStart = codeEditor.selectionEnd = start + textToInsert.length;
+    
+    hideSuggestions();
+    updateLineNumbers();
+    updateHighlighting();
+    codeEditor.focus();
+}
+
+function hideSuggestions() {
+    if (suggestionsBox) {
+        suggestionsBox.style.display = 'none';
+        currentSuggestions = [];
+    }
+}
+
+function getCursorCoordinates() {
+    const textBefore = codeEditor.value.substring(0, codeEditor.selectionStart);
+    const lines = textBefore.split('\n');
+    const lineNum = lines.length;
+    const colNum = lines[lines.length - 1].length;
+    
+    const lineHeight = 1.6 * 14; 
+    const charWidth = 8.4; 
+    
+    const top = (lineNum * lineHeight) - codeEditor.scrollTop + 24;
+    const left = (colNum * charWidth) - codeEditor.scrollLeft + 24;
+    
+    return { top, left };
+}
+
 function handleEditorKeys(e) {
+    if (suggestionsBox.style.display === 'block') {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeSuggestionIndex = (activeSuggestionIndex + 1) % currentSuggestions.length;
+            renderSuggestions();
+            return;
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeSuggestionIndex = (activeSuggestionIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
+            renderSuggestions();
+            return;
+        }
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            applySuggestion(currentSuggestions[activeSuggestionIndex]);
+            return;
+        }
+        if (e.key === 'Escape') {
+            hideSuggestions();
+            return;
+        }
+    }
+
     if (e.key === 'Tab') {
         e.preventDefault();
         const start = codeEditor.selectionStart;
@@ -865,12 +1002,18 @@ function renderTreeNodes(items, container) {
 }
 
 async function loadFile(path) {
-    currentFilePath = path;
-    currentFilename.textContent = path;
+    // If already open, just switch
+    if (openFiles[path]) {
+        switchTab(path);
+        return;
+    }
 
-    // Check if it's a media file
     const filename = path.split('/').pop();
+    
+    // Check if it's a media file
     if (isMediaFile(filename)) {
+        currentFilePath = path;
+        currentFilename.textContent = path;
         displayMedia(path, filename);
         return;
     }
@@ -881,13 +1024,103 @@ async function loadFile(path) {
 
         if (data.content !== undefined) {
             hideMedia();
-            codeEditor.value = data.content;
-            updateLineNumbers();
-            updateHighlighting();
+            
+            // Save current file content before switching
+            if (currentFilePath && openFiles[currentFilePath]) {
+                openFiles[currentFilePath].content = codeEditor.value;
+            }
+
+            // Add to open files
+            openFiles[path] = {
+                content: data.content,
+                name: filename
+            };
+
+            switchTab(path);
         }
     } catch (err) {
         alert('Error loading file');
     }
+}
+
+function switchTab(path) {
+    if (!openFiles[path]) return;
+
+    // Save current content if any
+    if (currentFilePath && openFiles[currentFilePath]) {
+        openFiles[currentFilePath].content = codeEditor.value;
+    }
+
+    currentFilePath = path;
+    currentFilename.textContent = path;
+    
+    hideMedia();
+    codeEditor.value = openFiles[path].content;
+    
+    updateLineNumbers();
+    updateHighlighting();
+    renderTabs();
+    
+    // Update file tree active state
+    document.querySelectorAll('.file-tree li.file').forEach(li => {
+        // This is a bit slow but simple
+        const content = li.querySelector('.file-content').textContent;
+        const name = path.split('/').pop();
+        if (content.includes(name)) {
+            document.querySelectorAll('.file-tree li.active').forEach(el => el.classList.remove('active'));
+            li.classList.add('active');
+        }
+    });
+}
+
+function closeTab(path, e) {
+    if (e) e.stopPropagation();
+    
+    delete openFiles[path];
+    
+    const remainingPaths = Object.keys(openFiles);
+    
+    if (path === currentFilePath) {
+        if (remainingPaths.length > 0) {
+            switchTab(remainingPaths[remainingPaths.length - 1]);
+        } else {
+            currentFilePath = null;
+            currentFilename.textContent = 'No file open';
+            codeEditor.value = '';
+            updateLineNumbers();
+            updateHighlighting();
+        }
+    }
+    
+    renderTabs();
+}
+
+function renderTabs() {
+    if (!editorTabs) return;
+    editorTabs.innerHTML = '';
+    
+    Object.keys(openFiles).forEach(path => {
+        const file = openFiles[path];
+        const tab = document.createElement('div');
+        tab.className = `tab ${path === currentFilePath ? 'active' : ''}`;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'tab-name';
+        nameSpan.textContent = file.name;
+        nameSpan.title = path;
+        
+        const closeSpan = document.createElement('span');
+        closeSpan.className = 'tab-close';
+        closeSpan.innerHTML = '&times;';
+        closeSpan.onclick = (e) => closeTab(path, e);
+        
+        tab.appendChild(nameSpan);
+        tab.appendChild(closeSpan);
+        
+        tab.onclick = () => switchTab(path);
+        
+        editorTabs.appendChild(tab);
+    });
 }
 
 async function saveFile() {
@@ -905,6 +1138,11 @@ async function saveFile() {
         const data = await response.json();
 
         if (data.success) {
+            // Update in-memory content too
+            if (openFiles[currentFilePath]) {
+                openFiles[currentFilePath].content = codeEditor.value;
+            }
+            
             const originalText = saveBtn.textContent;
             saveBtn.textContent = 'Saved!';
             setTimeout(() => saveBtn.textContent = originalText, 2000);
@@ -1189,10 +1427,9 @@ async function deleteItem(path) {
 
         if (data.success) {
             loadFileTree();
-            if (currentFilePath === path) {
-                currentFilePath = null;
-                codeEditor.value = '';
-                currentFilename.textContent = 'No file open';
+            // Close tab if it was open
+            if (openFiles[path]) {
+                closeTab(path);
             }
         } else {
             alert('Failed to delete: ' + data.error);

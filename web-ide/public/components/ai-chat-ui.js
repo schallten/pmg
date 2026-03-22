@@ -17,8 +17,21 @@ export function initAIChatUI() {
     const chatInput = document.getElementById('chat-input');
     const sendBtn = document.getElementById('send-chat');
     const includeCodeCheckbox = document.getElementById('include-code');
+    const clearChatBtn = document.getElementById('clear-chat-btn');
 
     if (!chatBtn || !chatModal) return;
+
+    // Clear chat functionality
+    if (clearChatBtn) {
+        clearChatBtn.addEventListener('click', () => {
+            if (confirm('Clear chat history?')) {
+                AIChat.clearHistory();
+                if (chatMessages) chatMessages.innerHTML = '';
+                chatHistory = [];
+                showMessage('Chat history cleared', 'system');
+            }
+        });
+    }
 
     // Load saved API key
     const savedKey = AIChat.getApiKey();
