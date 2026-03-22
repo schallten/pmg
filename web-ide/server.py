@@ -4,6 +4,9 @@ import platform
 from flask import Flask, request, jsonify, send_file
 import logging
 import json
+import threading
+import queue
+import uuid
 
 app = Flask(__name__, static_folder='public', static_url_path='')
 
@@ -13,6 +16,39 @@ logger = logging.getLogger(__name__)
 
 current_workspace = None
 RECENT_WORKSPACES_FILE = 'recent_workspaces.json'
+
+# Terminal Global State
+# Dictionary mapping terminal_id to {process, fd, output_queue}
+terminals = {}
+
+def read_terminal_output(fd, terminal_id):
+    while True:
+        try:
+            # Read non-blocking up to 1024 bytes
+            data = os.read(fd, 1024)
+            if data:
+                if terminal_id in terminals:
+                    terminals[terminal_id]['output_queue'].put(data.decode('utf-8', errors='replace'))
+                else:
+                    break
+            else:
+                break
+        except Exception:
+            break
+
+def win_read_output(out, terminal_id):
+    while True:
+        try:
+            data = out.read(1)
+            if data:
+                if terminal_id in terminals:
+                    terminals[terminal_id]['output_queue'].put(data.decode('utf-8', errors='replace'))
+                else:
+                    break
+            else:
+                break
+        except Exception:
+            break
 
 def load_recent_workspaces():
     if not os.path.exists(RECENT_WORKSPACES_FILE):
@@ -163,48 +199,141 @@ def save_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/terminal', methods=['POST'])
-def open_terminal():
+@app.route('/terminal/start', methods=['POST'])
+def terminal_start():
     if not current_workspace:
         return jsonify({'error': 'No workspace open'}), 400
-        
+            
+    terminal_id = str(uuid.uuid4())
     system_platform = platform.system()
     
-    try:
-        if system_platform == 'Windows':
-            subprocess.Popen(['cmd.exe', '/c', 'start', 'cmd.exe', '/K', f'cd /d "{current_workspace}"'], shell=True)
-        elif system_platform == 'Darwin': # macOS
-            subprocess.Popen(['open', '-a', 'Terminal', current_workspace])
-        elif system_platform == 'Linux':
-            terminals = [
-                ['gnome-terminal', '--working-directory', current_workspace],
-                ['konsole', '--workdir', current_workspace],
-                ['x-terminal-emulator', '-e', f'cd "{current_workspace}" && $SHELL'],
-                ['xterm', '-e', f'cd "{current_workspace}" && $SHELL']
-            ]
-            
-            spawned = False
-            for cmd in terminals:
-                try:
-                    subprocess.Popen(cmd, start_new_session=True)
-                    spawned = True
-                    break
-                except FileNotFoundError:
-                    continue
-                except Exception:
-                    continue
-            
-            if not spawned:
-                 return jsonify({'error': 'No supported terminal found'}), 500
-                 
-        else:
-             return jsonify({'error': f'Unsupported OS: {system_platform}'}), 400
-             
-        return jsonify({'success': True, 'message': 'Terminal launch requested'})
+    output_queue = queue.Queue()
+    
+    if system_platform != 'Windows':
+        import pty
+        master, slave = pty.openpty()
+        process = subprocess.Popen(
+            ['/bin/bash'],
+            stdin=slave,
+            stdout=slave,
+            stderr=slave,
+            cwd=current_workspace,
+            env=os.environ.copy()
+        )
+        os.close(slave)
         
+        terminals[terminal_id] = {
+            'process': process,
+            'fd': master,
+            'output_queue': output_queue
+        }
+        
+        t = threading.Thread(target=read_terminal_output, args=(master, terminal_id))
+        t.daemon = True
+        t.start()
+    else:
+        process = subprocess.Popen(
+            ['cmd.exe'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=current_workspace,
+            env=os.environ.copy()
+        )
+        
+        terminals[terminal_id] = {
+            'process': process,
+            'fd': None,
+            'output_queue': output_queue
+        }
+        
+        t = threading.Thread(target=win_read_output, args=(process.stdout, terminal_id))
+        t.daemon = True
+        t.start()
+        
+    return jsonify({'success': True, 'terminal_id': terminal_id})
+
+@app.route('/terminal/read', methods=['GET'])
+def terminal_read():
+    terminal_id = request.args.get('terminal_id')
+    if not terminal_id or terminal_id not in terminals:
+        return jsonify({'error': 'Invalid terminal_id'}), 404
+        
+    output = []
+    q = terminals[terminal_id]['output_queue']
+    while not q.empty():
+        try:
+            output.append(q.get_nowait())
+        except queue.Empty:
+            break
+    return jsonify({'output': "".join(output)})
+
+@app.route('/terminal/write', methods=['POST'])
+def terminal_write():
+    data = request.get_json()
+    terminal_id = data.get('terminal_id')
+    input_text = data.get('input', '')
+    
+    if not terminal_id or terminal_id not in terminals:
+        return jsonify({'error': 'Invalid terminal_id'}), 404
+        
+    term = terminals[terminal_id]
+    system_platform = platform.system()
+    
+    if system_platform != 'Windows' and term['fd'] is not None:
+        try:
+            os.write(term['fd'], input_text.encode('utf-8'))
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    elif term['process']:
+        try:
+            term['process'].stdin.write(input_text.encode('utf-8'))
+            term['process'].stdin.flush()
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+            
+    return jsonify({'success': True})
+
+@app.route('/terminal/resize', methods=['POST'])
+def terminal_resize():
+    data = request.get_json()
+    terminal_id = data.get('terminal_id')
+    cols = data.get('cols', 80)
+    rows = data.get('rows', 24)
+    
+    if not terminal_id or terminal_id not in terminals:
+        return jsonify({'error': 'Invalid terminal_id'}), 404
+        
+    term = terminals[terminal_id]
+    if platform.system() != 'Windows' and term['fd'] is not None:
+        try:
+            import fcntl, termios, struct
+            winsize = struct.pack("HHHH", rows, cols, 0, 0)
+            fcntl.ioctl(term['fd'], termios.TIOCSWINSZ, winsize)
+        except Exception:
+            pass
+    return jsonify({'success': True})
+
+@app.route('/terminal/kill', methods=['POST'])
+def terminal_kill():
+    data = request.get_json()
+    terminal_id = data.get('terminal_id')
+    
+    if not terminal_id or terminal_id not in terminals:
+        return jsonify({'error': 'Invalid terminal_id'}), 404
+        
+    term = terminals[terminal_id]
+    try:
+        term['process'].kill()
+        if term['fd'] is not None:
+            try:
+                os.close(term['fd'])
+            except:
+                pass
+        del terminals[terminal_id]
+        return jsonify({'success': True})
     except Exception as e:
-        logger.error(f"Failed to open terminal: {e}")
-        return jsonify({'error': 'Failed to open terminal'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/browse', methods=['GET'])
 def browse_directory():

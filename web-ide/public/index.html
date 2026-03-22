@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PMG - WEB IDE</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 </head>
 
 <body>
@@ -63,6 +66,29 @@
                 <div id="media-preview" class="media-preview"></div>
             </div>
 
+            <div id="terminal-resizer" class="resizer-v" style="display: none;"></div>
+
+            <div id="terminal-pane"
+                style="height: 30vh; background: #000; display: none; flex-direction: column; border-top: 1px solid var(--border);">
+                <div
+                    style="height: 30px; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; background: var(--bg-sidebar); color: var(--text-secondary); font-size: 13px;">
+                    <div style="display: flex; gap: 15px; align-items: center; flex: 1; overflow: hidden;">
+                        <span style="font-weight: 600; flex-shrink: 0;">TERMINAL</span>
+                        <div id="terminal-tabs" style="display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none;">
+                            <!-- Tabs will be injected here -->
+                        </div>
+                        <span id="new-terminal" style="cursor: pointer; padding: 0 8px; font-size: 16px;" title="New Terminal">+</span>
+                    </div>
+                    <div class="terminal-actions" style="display: flex; gap: 15px; align-items: center;">
+                        <span id="clear-terminal" style="cursor: pointer; opacity: 0.7;" title="Clear">🧹 Clear</span>
+                        <span id="restart-terminal" style="cursor: pointer; opacity: 0.7;" title="Restart">↻ Restart</span>
+                        <span id="kill-terminal" style="cursor: pointer; opacity: 0.7; color: #ef4444;" title="Kill">☠ Kill</span>
+                        <span id="close-terminal" style="cursor: pointer; font-size: 18px;">&times;</span>
+                    </div>
+                </div>
+                <div id="terminal-container" style="flex: 1; min-height: 0; padding: 10px;"></div>
+            </div>
+
             <!-- Status Bar -->
             <div id="status-bar" class="status-bar">
                 <span>CPU: <span id="cpu-display">--%</span></span>
@@ -81,6 +107,21 @@
                 <span class="close-btn" id="close-settings">&times;</span>
             </div>
             <div class="modal-body">
+                <h3>General</h3>
+                <div class="setting-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h4>Theme</h4>
+                        <p style="font-size: 0.85em; color: var(--text-secondary);">Choose your preferred color scheme</p>
+                    </div>
+                    <select id="theme-select" style="padding: 8px; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border); border-radius: 6px;">
+                        <option value="default">One Dark (Default)</option>
+                        <option value="monokai">Monokai</option>
+                        <option value="dracula">Dracula</option>
+                        <option value="solarized-dark">Solarized Dark</option>
+                        <option value="light">Light</option>
+                    </select>
+                </div>
+
                 <h3>Plugins</h3>
                 <div id="plugin-list" class="plugin-list">
                     <!-- Plugins will be injected here -->

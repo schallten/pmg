@@ -4,6 +4,7 @@ import { initStatusBar } from '../components/status-bar.js';
 import { isMediaFile, displayMedia, hideMedia } from '../components/media-viewer.js';
 import { initAIChatUI } from '../components/ai-chat-ui.js';
 import { initBrowserModal } from '../components/browser-modal.js';
+import * as ELINSupport from '../plugins/elin.js';
 
 // ==========================================
 // PMG - WEB IDE Client Side Logic
@@ -22,6 +23,8 @@ const highlightingContent = document.getElementById('highlighting-content');
 const lineNumbers = document.getElementById('line-numbers');
 const currentFilename = document.getElementById('current-filename');
 const saveBtn = document.getElementById('save-btn');
+const closeTerminalBtn = document.getElementById('close-terminal');
+const statusScreen = document.getElementById('status-bar');
 const terminalBtn = document.getElementById('terminal-btn');
 const newFileBtn = document.getElementById('new-file-btn');
 const refreshBtn = document.getElementById('refresh-btn');
@@ -36,28 +39,191 @@ const vcsHistoryBtn = document.getElementById('vcs-history-btn');
 const vcsModal = document.getElementById('vcs-modal');
 const closeVcsBtn = document.getElementById('close-vcs');
 const vcsHistoryList = document.getElementById('vcs-history-list');
+const terminalResizer = document.getElementById('terminal-resizer');
+const themeSelect = document.getElementById('theme-select');
+const newTerminalBtn = document.getElementById('new-terminal');
+const killTerminalBtn = document.getElementById('kill-terminal');
+const terminalTabsContainer = document.getElementById('terminal-tabs');
 
 // --- 2. State Variables ---
 let currentFilePath = null;
+let coreModules = [];
 let plugins = [];
 let customPlugins = [];
 let isWordWrapEnabled = false;
 
+// Terminal multi-state
+let terminals = {}; // { id: { instance, fitAddon, name, container } }
+let activeTerminalId = null;
+let terminalPolling = null;
+
+// Themes
+const THEME_KEY = 'pmg-ide-theme';
+
+function initThemes() {
+    if (!themeSelect) return;
+
+    const savedTheme = localStorage.getItem(THEME_KEY);
+    if (savedTheme) {
+        themeSelect.value = savedTheme;
+        applyTheme(savedTheme);
+    }
+
+    themeSelect.addEventListener('change', (e) => {
+        const theme = e.target.value;
+        applyTheme(theme);
+        localStorage.setItem(THEME_KEY, theme);
+    });
+}
+
+function applyTheme(theme) {
+    // Remove all theme classes
+    document.body.classList.forEach(cls => {
+        if (cls.startsWith('theme-')) {
+            document.body.classList.remove(cls);
+        }
+    });
+
+    if (theme !== 'default') {
+        document.body.classList.add(`theme-${theme}`);
+    }
+
+    // Update all terminal themes
+    const termTheme = getTerminalTheme(theme);
+    Object.keys(terminals).forEach(id => {
+        terminals[id].instance.options.theme = termTheme;
+    });
+}
+
+function getTerminalTheme(theme) {
+    switch (theme) {
+        case 'monokai':
+            return {
+                background: '#272822',
+                foreground: '#f8f8f2',
+                cursor: '#f92672',
+                black: '#272822',
+                red: '#f92672',
+                green: '#a6e22e',
+                yellow: '#f4bf75',
+                blue: '#66d9ef',
+                magenta: '#ae81ff',
+                cyan: '#a1efe4',
+                white: '#f8f8f2'
+            };
+        case 'dracula':
+            return {
+                background: '#282a36',
+                foreground: '#f8f8f2',
+                cursor: '#bd93f9',
+                black: '#21222c',
+                red: '#ff5555',
+                green: '#50fa7b',
+                yellow: '#f1fa8c',
+                blue: '#bd93f9',
+                magenta: '#ff79c6',
+                cyan: '#8be9fd',
+                white: '#f8f8f2'
+            };
+        case 'solarized-dark':
+            return {
+                background: '#002b36',
+                foreground: '#839496',
+                cursor: '#93a1a1',
+                black: '#073642',
+                red: '#dc322f',
+                green: '#859900',
+                yellow: '#b58900',
+                blue: '#268bd2',
+                magenta: '#d33682',
+                cyan: '#2aa198',
+                white: '#eee8d5'
+            };
+        case 'light':
+            return {
+                background: '#ffffff',
+                foreground: '#1f2937',
+                cursor: '#3b82f6',
+                black: '#000000',
+                red: '#ef4444',
+                green: '#10b981',
+                yellow: '#f59e0b',
+                blue: '#3b82f6',
+                magenta: '#8b5cf6',
+                cyan: '#06b6d4',
+                white: '#ffffff'
+            };
+        default: // One Dark
+            return {
+                background: '#0f111a',
+                foreground: '#e2e8f0',
+                cursor: '#6366f1',
+                selection: 'rgba(99, 102, 241, 0.3)',
+                black: '#000000',
+                red: '#ef4444',
+                green: '#10b981',
+                yellow: '#f59e0b',
+                blue: '#3b82f6',
+                magenta: '#8b5cf6',
+                cyan: '#06b6d4',
+                white: '#ffffff'
+            };
+    }
+}
+
 // --- 3. Plugin System ---
 
 const CUSTOM_PLUGINS_KEY = 'pmg-ide-custom-plugins';
+const PLUGIN_STATES_KEY = 'pmg-ide-plugin-states';
 
 function loadPlugins() {
-    // Load built-in plugins
+    // Core Modules (not in plugin list, used as fallbacks)
+    coreModules = [
+        SyntaxHighlighter
+    ];
+
+    // Default built-in plugins (toggleable in Settings)
     plugins = [
-        SyntaxHighlighter,
+        ELINSupport,
         AIChat
     ];
+
+    // Load states
+    loadPluginStates();
 
     // Load custom plugins from localStorage
     loadCustomPluginsFromStorage();
 
+    // Init themes
+    initThemes();
+
     updatePluginCount();
+}
+
+function savePluginStates() {
+    const states = {};
+    plugins.forEach(p => {
+        if (p.getName && p.isEnabled) {
+            states[p.getName()] = p.isEnabled.value;
+        }
+    });
+    localStorage.setItem(PLUGIN_STATES_KEY, JSON.stringify(states));
+}
+
+function loadPluginStates() {
+    const stored = localStorage.getItem(PLUGIN_STATES_KEY);
+    if (!stored) return;
+
+    try {
+        const states = JSON.parse(stored);
+        plugins.forEach(p => {
+            if (p.getName && states[p.getName()] !== undefined && p.isEnabled) {
+                p.isEnabled.value = states[p.getName()];
+            }
+        });
+    } catch (e) {
+        console.error('Failed to load plugin states:', e);
+    }
 }
 
 function updatePluginCount() {
@@ -204,6 +370,7 @@ function renderSettings() {
             const isChecked = e.target.checked;
             if (plugin.isEnabled) {
                 plugin.isEnabled.value = isChecked;
+                savePluginStates();
                 if (currentFilePath) {
                     updateHighlighting();
                 }
@@ -473,6 +640,7 @@ workspaceInput.addEventListener('keypress', (e) => {
 // Toolbar buttons
 saveBtn.addEventListener('click', saveFile);
 terminalBtn.addEventListener('click', openTerminal);
+closeTerminalBtn.addEventListener('click', closeTerminal);
 if (newFileBtn) {
     newFileBtn.addEventListener('click', createNewFile);
 }
@@ -520,7 +688,38 @@ function updateHighlighting() {
         text += " ";
     }
 
-    highlightingContent.innerHTML = SyntaxHighlighter.highlight(text);
+    const filename = currentFilename.textContent || '';
+    let customHighlight = null;
+
+    // Check built-in and custom plugins first
+    for (const plugin of plugins.concat(customPlugins)) {
+        if (plugin.isEnabled && plugin.isEnabled.value !== false && typeof plugin.highlight === 'function') {
+            const h = plugin.highlight(text, filename);
+            if (h !== null && h !== undefined) {
+                customHighlight = h;
+                break;
+            }
+        }
+    }
+
+    // Check core modules if no plugin matched
+    if (!customHighlight) {
+        for (const module of coreModules) {
+            if (module !== SyntaxHighlighter && module.isEnabled && module.isEnabled.value !== false && typeof module.highlight === 'function') {
+                const h = module.highlight(text, filename);
+                if (h !== null && h !== undefined) {
+                    customHighlight = h;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (customHighlight) {
+        highlightingContent.innerHTML = customHighlight;
+    } else {
+        highlightingContent.innerHTML = SyntaxHighlighter.highlight(text);
+    }
 }
 
 function handleEditorKeys(e) {
@@ -717,15 +916,239 @@ async function saveFile() {
     }
 }
 
-async function openTerminal() {
+async function closeTerminal() {
+    document.getElementById('terminal-pane').style.display = 'none';
+    if (terminalResizer) terminalResizer.style.display = 'none';
+}
+
+async function notifyResize(terminalId, cols, rows) {
     try {
-        const response = await fetch('/terminal', { method: 'POST' });
+        await fetch('/terminal/resize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ terminal_id: terminalId, cols, rows })
+        });
+    } catch (e) { }
+}
+
+function renderTerminalTabs() {
+    if (!terminalTabsContainer) return;
+    terminalTabsContainer.innerHTML = '';
+    
+    Object.keys(terminals).forEach(id => {
+        const tab = document.createElement('div');
+        tab.className = `terminal-tab ${id === activeTerminalId ? 'active' : ''}`;
+        tab.textContent = terminals[id].name;
+        tab.onclick = () => switchTerminal(id);
+        terminalTabsContainer.appendChild(tab);
+    });
+}
+
+async function switchTerminal(id) {
+    if (!terminals[id]) return;
+    
+    // Hide all terminal containers
+    Object.keys(terminals).forEach(tid => {
+        if (terminals[tid].container) {
+            terminals[tid].container.style.display = 'none';
+        }
+    });
+    
+    activeTerminalId = id;
+    const activeTerm = terminals[id];
+    
+    if (activeTerm.container) {
+        activeTerm.container.style.display = 'block';
+    }
+    
+    activeTerm.instance.focus();
+    renderTerminalTabs();
+    
+    // Fit and notify
+    setTimeout(() => {
+        activeTerm.fitAddon.fit();
+        notifyResize(id, activeTerm.instance.cols, activeTerm.instance.rows);
+    }, 50);
+}
+
+async function killTerminal(id) {
+    id = id || activeTerminalId;
+    if (!id || !terminals[id]) return;
+    
+    if (!confirm('Are you sure you want to kill this terminal process?')) return;
+    
+    try {
+        const response = await fetch('/terminal/kill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ terminal_id: id })
+        });
+        
+        if (response.ok) {
+            terminals[id].instance.dispose();
+            if (terminals[id].container) {
+                terminals[id].container.remove();
+            }
+            delete terminals[id];
+            
+            const remainingIds = Object.keys(terminals);
+            if (remainingIds.length > 0) {
+                switchTerminal(remainingIds[remainingIds.length - 1]);
+            } else {
+                activeTerminalId = null;
+                closeTerminal();
+            }
+            renderTerminalTabs();
+        }
+    } catch (e) {
+        console.error('Failed to kill terminal:', e);
+    }
+}
+
+async function openTerminal() {
+    const pane = document.getElementById('terminal-pane');
+    pane.style.display = 'flex';
+    if (terminalResizer) terminalResizer.style.display = 'block';
+
+    // Global Terminal controls
+    if (newTerminalBtn && !newTerminalBtn.dataset.hasListener) {
+        newTerminalBtn.onclick = () => createNewTerminal();
+        newTerminalBtn.dataset.hasListener = 'true';
+    }
+    
+    if (killTerminalBtn && !killTerminalBtn.dataset.hasListener) {
+        killTerminalBtn.onclick = () => killTerminal();
+        killTerminalBtn.dataset.hasListener = 'true';
+    }
+
+    const clearBtn = document.getElementById('clear-terminal');
+    const restartBtn = document.getElementById('restart-terminal');
+
+    if (clearBtn && !clearBtn.dataset.hasListener) {
+        clearBtn.addEventListener('click', () => {
+            if (activeTerminalId && terminals[activeTerminalId]) {
+                terminals[activeTerminalId].instance.clear();
+            }
+        });
+        clearBtn.dataset.hasListener = 'true';
+    }
+
+    if (restartBtn && !restartBtn.dataset.hasListener) {
+        restartBtn.addEventListener('click', async () => {
+            if (activeTerminalId && terminals[activeTerminalId]) {
+                const id = activeTerminalId;
+                terminals[id].instance.write('\r\n\x1b[33mRestarting terminal...\x1b[0m\r\n');
+                await killTerminal(id);
+                await createNewTerminal();
+            }
+        });
+        restartBtn.dataset.hasListener = 'true';
+    }
+
+    if (Object.keys(terminals).length === 0) {
+        await createNewTerminal();
+    } else if (activeTerminalId) {
+        switchTerminal(activeTerminalId);
+    }
+
+    // Ensure polling is running if terminals exist
+    startTerminalPolling();
+}
+
+function startTerminalPolling() {
+    if (terminalPolling) return;
+    
+    terminalPolling = setInterval(async () => {
+        const pane = document.getElementById('terminal-pane');
+        if (pane.style.display === 'none') return;
+        
+        const ids = Object.keys(terminals);
+        if (ids.length === 0) {
+            clearInterval(terminalPolling);
+            terminalPolling = null;
+            return;
+        }
+        
+        for (const id of ids) {
+            try {
+                const res = await fetch(`/terminal/read?terminal_id=${id}`);
+                const text = await res.json();
+                if (text.output && terminals[id]) {
+                    terminals[id].instance.write(text.output);
+                }
+            } catch (e) {
+                console.error('Terminal poll error:', e);
+            }
+        }
+    }, 50);
+}
+
+async function createNewTerminal() {
+    try {
+        const response = await fetch('/terminal/start', { method: 'POST' });
         const data = await response.json();
+        
         if (data.success) {
-            console.log('Terminal opened on server');
+            const terminalId = data.terminal_id;
+            const termNumber = Object.keys(terminals).length + 1;
+            
+            // Create container for this terminal
+            const container = document.createElement('div');
+            container.id = `terminal-${terminalId}`;
+            container.className = 'terminal-instance-container';
+            container.style.height = '100%';
+            container.style.width = '100%';
+            document.getElementById('terminal-container').appendChild(container);
+
+            const instance = new window.Terminal({
+                cursorBlink: true,
+                theme: getTerminalTheme(themeSelect.value),
+                fontFamily: 'var(--font-mono)',
+                fontSize: 14,
+                lineHeight: 1.4,
+                allowTransparency: true
+            });
+
+            const fitAddon = new window.FitAddon.FitAddon();
+            instance.loadAddon(fitAddon);
+
+            instance.open(container);
+
+            instance.attachCustomKeyEventHandler((e) => {
+                if (e.ctrlKey && e.key === 'c' && instance.hasSelection()) {
+                    return false;
+                }
+                if (e.ctrlKey && e.key === 'c' && !instance.hasSelection()) {
+                    fetch('/terminal/write', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ terminal_id: terminalId, input: '\x03' })
+                    });
+                    return false;
+                }
+                return true;
+            });
+
+            instance.onData(async (data) => {
+                await fetch('/terminal/write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ terminal_id: terminalId, input: data })
+                });
+            });
+
+            terminals[terminalId] = {
+                instance,
+                fitAddon,
+                container,
+                name: `bash ${termNumber}`
+            };
+            
+            switchTerminal(terminalId);
+            startTerminalPolling();
         }
     } catch (err) {
-        console.error('Failed to open terminal', err);
+        console.error('Failed to create new terminal:', err);
     }
 }
 
@@ -778,3 +1201,46 @@ async function deleteItem(path) {
         alert('Error deleting item');
     }
 }
+
+function initTerminalResizer() {
+    if (!terminalResizer) return;
+
+    let isResizing = false;
+    const terminalPane = document.getElementById('terminal-pane');
+
+    terminalResizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        terminalResizer.classList.add('active');
+        document.body.style.cursor = 'row-resize';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+
+        const terminalTop = e.clientY;
+        const windowHeight = window.innerHeight;
+        const newHeight = windowHeight - terminalTop;
+
+        // Min 50px, Max 80vh
+        if (newHeight > 50 && newHeight < (windowHeight * 0.8)) {
+            terminalPane.style.height = `${newHeight}px`;
+            if (activeTerminalId && terminals[activeTerminalId]) {
+                const term = terminals[activeTerminalId];
+                term.fitAddon.fit();
+                notifyResize(activeTerminalId, term.instance.cols, term.instance.rows);
+            }
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            terminalResizer.classList.remove('active');
+            document.body.style.cursor = 'default';
+        }
+    });
+}
+
+// Initialize resizer
+initTerminalResizer();

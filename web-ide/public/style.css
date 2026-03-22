@@ -13,10 +13,56 @@
     --font-mono: "JetBrains Mono", "Fira Code", Consolas, Monaco, monospace;
 }
 
+body.theme-monokai {
+    --bg-dark: #272822;
+    --bg-sidebar: #1e1f1c;
+    --bg-editor: #272822;
+    --text-primary: #f8f8f2;
+    --text-secondary: #75715e;
+    --accent: #f92672;
+    --accent-hover: #fd971f;
+    --border: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-dracula {
+    --bg-dark: #282a36;
+    --bg-sidebar: #1e1f29;
+    --bg-editor: #282a36;
+    --text-primary: #f8f8f2;
+    --text-secondary: #6272a4;
+    --accent: #bd93f9;
+    --accent-hover: #ff79c6;
+    --border: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-solarized-dark {
+    --bg-dark: #002b36;
+    --bg-sidebar: #073642;
+    --bg-editor: #002b36;
+    --text-primary: #839496;
+    --text-secondary: #586e75;
+    --accent: #268bd2;
+    --accent-hover: #2aa198;
+    --border: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-light {
+    --bg-dark: #ffffff;
+    --bg-sidebar: #f3f4f6;
+    --bg-editor: #ffffff;
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --border: rgba(0, 0, 0, 0.1);
+    --hover: rgba(0, 0, 0, 0.05);
+}
+
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 body {
@@ -26,6 +72,7 @@ body {
     height: 100vh;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Screens */
@@ -1042,6 +1089,79 @@ input:checked+.slider:before {
 .vcs-modal-content {
     width: 650px;
     max-width: 95%;
+}
+
+/* Terminal Resizer */
+.resizer-v {
+    height: 4px;
+    background: var(--border);
+    cursor: row-resize;
+    z-index: 30;
+    transition: background 0.2s, height 0.2s;
+}
+
+.resizer-v:hover, .resizer-v.active {
+    background: var(--accent);
+    height: 6px;
+}
+
+/* Terminal Styling */
+#terminal-pane {
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+    z-index: 20;
+}
+
+#terminal-container {
+    background: #0f111a;
+    position: relative;
+    overflow: hidden;
+}
+
+#terminal-container::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
+                linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+    background-size: 100% 4px, 3px 100%;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0.5;
+}
+
+.terminal-actions span:hover {
+    color: var(--text-primary);
+    opacity: 1 !important;
+    transform: translateY(-1px);
+}
+
+.terminal-actions span {
+    transition: all 0.2s;
+}
+
+.terminal-tab {
+    padding: 2px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 11px;
+    transition: all 0.2s;
+    color: var(--text-secondary);
+}
+
+.terminal-tab.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.terminal-tab:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 /* Scrollbar Styling */

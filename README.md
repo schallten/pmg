@@ -75,8 +75,14 @@ Acts as the system’s source of truth.
 A browser-based code editor for local development.
 
 * File system management (create, delete, edit files)
-* Integrated terminal
-* Media file support (images, video, audio)
+* **Integrated Terminal**: High-performance terminal emulator powered by `xterm.js`.
+* **Backend**: Uses Python's `pty` (on Linux/macOS) or `subprocess` (on Windows) to spawn multiple real shells.
+* **Multi-Terminal Support**: Open multiple independent terminal sessions and switch between them using tabs.
+* **Communication**: Fast 50ms polling for real-time output and POST requests for input across all active sessions.
+* **Visuals**: One Dark Pro inspired theme with scanline effects for a "fun" developer experience.
+* **Resizable**: Draggable handle to adjust terminal height.
+* **Themes**: Support for multiple themes (One Dark, Monokai, Dracula, Solarized Dark, Light).
+* **Controls**: Quick "New Terminal", "Clear", "Restart", and "Kill" functionality.* Media file support (images, video, audio)
 * Plugin system for extensibility
 * Recent workspaces management
 
